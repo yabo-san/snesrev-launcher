@@ -24,7 +24,8 @@ and keymapper windows; this fork makes it one launcher for all three games and m
 from the Super Mario All-Stars ROM. I purposely didn't bother implementing them. Feel free to wire it
 in; the hook is there (an extra ROM per game, `ExtraRom` in `Game.cs`).
 
-That's it. No .NET to install, no Python, no compiler to set up.
+That's it. Nothing to install: no .NET, no Python, no compiler, no git. Everything the game needs
+to build comes down in one zip.
 
 ## Install
 
@@ -42,14 +43,16 @@ pipeline:
 
 1. Pick the game at the top.
 2. **Choose ROM folder** once. It's remembered in `launcher.json` next to the exe.
-3. **Download**: fetches the port's source, your ROM, the compiler and SDL, builds the game. A few
-   minutes the first time. Zelda 3 and Super Mario World also extract their assets from the ROM
-   with a bundled Python.
+3. **Download**: fetches the game's build kit (one zip per game, attached to the same release as the
+   launcher), finds your ROM and copies it in, extracts the assets from the ROM where the port needs
+   that (Zelda 3, Super Mario World; with the Python inside the kit), then runs the kit's `build.cmd`
+   to compile the game.
 4. **Launch**.
 5. **Settings** (Zelda 3): RadzPrower's full settings and keymapper windows, below. Super Metroid and
    Super Mario World open their `.ini` in Notepad; see each port's README for the keys.
 
-The Download button becomes **Update** when the port has new commits, **Re-build** otherwise.
+The Download button becomes **Update** when the game on disk came from another launcher version,
+**Re-build** otherwise (it redoes the ROM, asset and build steps on the kit already there).
 Each game writes a log next to the exe (`zelda3.log`, `sm.log`, `smw.log`); look there first if
 something fails.
 
@@ -58,12 +61,20 @@ something fails.
 - One launcher, three games. The game list is `Game.cs`; adding a port is one entry.
 - Finds your ROM by hash in a folder you choose, instead of asking for the file every time. Headered
   ROMs are accepted. A mismatched hash warns but lets you continue.
-- Downloads, the git clone and the ROM search run on a worker thread instead of the UI thread. The
-  connectivity check is one HTTPS request to github.com instead of pings.
+- Downloads and the ROM search run on a worker thread instead of the UI thread. The connectivity
+  check is one HTTPS request to github.com instead of pings.
 - Runs on a supported .NET (10, LTS) as one self-contained exe. The original targeted .NET 7, out of
   support since May 2024, and would not start without that exact runtime.
-- Pinned everything: the .NET SDK (`global.json`), NuGet packages (`packages.lock.json`), the Python
-  packages used for Zelda 3's asset extraction. The original installed whatever was newest that day.
+- The build inputs are packaged, not fetched piecemeal. The original cloned the source with git and
+  downloaded a compiler, SDL, Python and pip separately on every user's machine, so what got built
+  depended on that machine (its git library failed on a global git setting it did not know, for
+  one). Now `.github/workflows/games.yml` assembles one **build kit** per game in CI: the source at
+  a pinned snesrev commit, the same TCC and SDL2 the port's own `run_with_tcc.bat` names, an
+  embedded Python with pinned packages where the asset step needs one, and a `build.cmd` with the
+  port's exact compile line. CI compiles a copy of the kit to prove it builds, then attaches the
+  kit (not the compiled game) to the release. Your PC runs `build.cmd` on the same bytes everyone
+  else gets. No game binaries are hosted here; `KIT.txt` inside each kit says what it was made from.
+- Pinned everything else too: the .NET SDK (`global.json`), NuGet packages (`packages.lock.json`).
 - Built and released by CI, not by hand. See `.github/workflows/`.
 
 ## Settings menu (Zelda 3)

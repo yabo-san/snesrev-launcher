@@ -1,7 +1,6 @@
 using System.Net.Http;
 using System.Text;
 
-using LibGit2Sharp;
 using System.IO.Compression;
 
 namespace Zelda_3_Launcher
@@ -17,23 +16,11 @@ namespace Zelda_3_Launcher
 
             switch (title)
             {
-                case "Repository Download":
-                    this.Shown += new System.EventHandler(this.cloneRepo);
+                case "Game Download":
+                    this.Shown += new System.EventHandler(this.downloadGame);
                     break;
                 case "Copying ROM File":
                     this.Shown += new System.EventHandler(this.copyROM);
-                    break;
-                case "Downloading TCC":
-                    this.Shown += new System.EventHandler(this.downloadTCC);
-                    break;
-                case "Downloading SDL2":
-                    this.Shown += new System.EventHandler(this.downloadSDL2);
-                    break;
-                case "Downloading Python":
-                    this.Shown += new System.EventHandler(this.downloadPython);
-                    break;
-                case "Downloading pip":
-                    this.Shown += new System.EventHandler(this.downloadPip);
                     break;
             }
         }
@@ -177,92 +164,78 @@ namespace Zelda_3_Launcher
 
         // Every long step runs off the UI thread and reports back through the progress bar, so the
         // window never shows "Not Responding" and a stalled step cannot hang the launcher.
-        private async void cloneRepo(object sender, EventArgs e)
+        // The game comes down as one build kit assembled and verified by this repo's CI: the source
+        // at a pinned snesrev commit, TCC, SDL2, the asset scripts, a python\ with its packages where
+        // the asset step needs one, and build.cmd with the port's own compile line. No compiled game
+        // is hosted; the kit is the same bytes on every machine and build.cmd runs here.
+        private async void downloadGame(object sender, EventArgs e)
         {
             this.Refresh();
+            var game = Program.game;
+            var repoDir = Program.repoDir;
+            var marker = Path.Combine(repoDir, Game.PackageMarker);
 
-            if (!await IsConnectedToInternet())
+            // Already this launcher's package on disk: nothing to download.
+            if (File.Exists(marker) && File.ReadAllText(marker).Trim() == Game.LauncherVersion && File.Exists(Path.Combine(repoDir, "build.cmd")))
             {
-                MessageBox.Show("Unable to reach github.com.\n\nCheck your internet connection and try again.", "No Connection", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                this.Dispose();
+                this.Close();
                 return;
             }
 
-            var game = Program.game;
-            var repoDir = Program.repoDir;
-            progBar.Style = ProgressBarStyle.Marquee;
+            var zip = Path.Combine(Program.currentDirectory, game.Dir + "-win-x64.zip");
+            this.updateLabel.Text = "Downloading " + game.Dir + "-win-x64.zip (v" + Game.LauncherVersion + ")...";
+            if (!await downloadFile(new Uri(game.PackageUrl), zip)) { this.Close(); return; }
 
+            this.updateLabel.Text = "Unpacking " + game.Dir + "...";
+            progBar.Style = ProgressBarStyle.Marquee;
             try
             {
                 await Task.Run(() =>
                 {
-                    if (Repository.IsValid(repoDir))
+                    // Keep what the user owns: the ROM(s), the ini and saves. Everything else is replaced.
+                    var keep = new List<string>();
+                    if (Directory.Exists(repoDir))
                     {
-                        using var repo = new Repository(repoDir);
-                        var iniFile = Path.Combine(repoDir, game.Ini);
-                        var iniBackup = Path.Combine(repoDir, "saves", game.Ini);
-                        Directory.CreateDirectory(Path.Combine(repoDir, "saves"));
-                        if (File.Exists(iniFile)) File.Copy(iniFile, iniBackup, true);
-
-                        // Fetch, then reset to the remote's tip: a clean copy of upstream, keeping the ini.
-                        var remote = repo.Network.Remotes["origin"];
-                        Commands.Fetch(repo, remote.Name, remote.FetchRefSpecs.Select(r => r.Specification), new FetchOptions(), null);
-                        var tracked = repo.Head.TrackedBranch ?? repo.Branches["origin/" + repo.Head.FriendlyName] ?? repo.Branches["origin/main"] ?? repo.Branches["origin/master"];
-                        if (tracked != null)
-                            repo.Reset(ResetMode.Hard, tracked.Tip, new CheckoutOptions { OnCheckoutProgress = CheckoutProgress });
-
-                        if (File.Exists(iniBackup)) File.Copy(iniBackup, iniFile, true);
+                        foreach (var name in new[] { game.Rom, game.Ini })
+                            if (File.Exists(Path.Combine(repoDir, name))) keep.Add(name);
+                        foreach (var extra in game.ExtraRoms)
+                            if (File.Exists(Path.Combine(repoDir, extra.SubDir, extra.Name))) keep.Add(Path.Combine(extra.SubDir, extra.Name));
                     }
-                    else
+                    var stash = Path.Combine(Program.currentDirectory, game.Dir + "-keep");
+                    if (Directory.Exists(stash)) Directory.Delete(stash, true);
+                    Directory.CreateDirectory(stash);
+                    foreach (var rel in keep)
                     {
-                        if (Directory.Exists(repoDir)) Directory.Delete(repoDir, true);
-                        Repository.Clone(game.RepoUrl, repoDir, new CloneOptions { OnCheckoutProgress = CheckoutProgress });
+                        Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(stash, rel))!);
+                        File.Copy(Path.Combine(repoDir, rel), Path.Combine(stash, rel), true);
                     }
+                    var saves = Path.Combine(repoDir, "saves");
+                    if (Directory.Exists(saves)) Directory.Move(saves, Path.Combine(stash, "saves"));
+
+                    if (Directory.Exists(repoDir)) Directory.Delete(repoDir, true);
+                    ZipFile.ExtractToDirectory(zip, repoDir);
+
+                    foreach (var rel in keep)
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(repoDir, rel))!);
+                        File.Copy(Path.Combine(stash, rel), Path.Combine(repoDir, rel), true);
+                    }
+                    if (Directory.Exists(Path.Combine(stash, "saves"))) { Directory.CreateDirectory(repoDir); if (Directory.Exists(saves)) Directory.Delete(saves, true); Directory.Move(Path.Combine(stash, "saves"), saves); }
+                    Directory.Delete(stash, true);
+
+                    File.WriteAllText(marker, Game.LauncherVersion);
                 });
             }
             catch (Exception ex)
             {
-                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " repository: " + ex + "\n");
-                MessageBox.Show("Could not download the " + game.Dir + " repository.\n\n" + ex.Message + "\n\nSee " + Program.logFile + ".", "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " package: " + ex + "\n");
+                MessageBox.Show("Could not unpack " + game.Dir + ".\n\n" + ex.Message + "\n\nSee " + Program.logFile + ".", "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-
-            this.Close();
-        }
-
-        public void CheckoutProgress(string path, int completed, int total)
-        {
-            if (total <= 0) return;
-            try
+            finally
             {
-                BeginInvoke(new MethodInvoker(() =>
-                {
-                    progBar.Style = ProgressBarStyle.Continuous;
-                    progBar.Maximum = total;
-                    progBar.Value = Math.Min(completed, total);
-                }));
+                try { File.Delete(zip); } catch { }
             }
-            catch { }
-        }
 
-        private async void downloadTCC(object sender, EventArgs e)
-        {
-            this.Refresh();
-            await downloadZip("tcc", "TCC.zip", new Uri(Program.game.TccUrl));
-            this.Close();
-        }
-
-        private async void downloadSDL2(object sender, EventArgs e)
-        {
-            this.Refresh();
-            await downloadZip("SDL2-" + Program.game.SdlVersion, "SDL2.zip", new Uri(Program.game.SdlUrl));
-            this.Close();
-        }
-
-        private async void downloadPython(object sender, EventArgs e)
-        {
-            this.Refresh();
-            // Pinned: the embeddable build the asset extraction was tested with.
-            await downloadZip("assets", "Python.zip", new Uri("https://www.python.org/ftp/python/3.11.1/python-3.11.1-embed-amd64.zip"));
             this.Close();
         }
 
@@ -310,45 +283,6 @@ namespace Zelda_3_Launcher
                 MessageBox.Show("Download failed: " + uri + "\n\n" + ex.Message, "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
-        }
-
-        private async Task downloadZip(string folder, string filename, Uri uri)
-        {
-            var directory = Path.Combine(Program.third_partyDir, folder);
-            var zip = Path.Combine(Program.third_partyDir, filename);
-
-            if (File.Exists(zip)) File.Delete(zip);
-            if (Directory.Exists(directory)) Directory.Delete(directory, true);
-
-            if (!await downloadFile(uri, zip)) return;
-
-            this.updateLabel.Text = "Extracting " + filename + " to " + folder + "...";
-            progBar.Style = ProgressBarStyle.Marquee;
-            try
-            {
-                await Task.Run(() =>
-                {
-                    if (filename.Equals("Python.zip")) ZipFile.ExtractToDirectory(zip, Path.Combine(Program.repoDir, "assets"), true);
-                    else ZipFile.ExtractToDirectory(zip, Program.third_partyDir, true);
-                });
-            }
-            catch (Exception ex)
-            {
-                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " extract " + filename + ": " + ex + "\n");
-                MessageBox.Show("Could not extract " + filename + ".\n\n" + ex.Message, "Extract failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                try { File.Delete(zip); } catch { }
-            }
-        }
-
-        private async void downloadPip(object sender, EventArgs e)
-        {
-            this.Refresh();
-            var destination = Path.Combine(Program.repoDir, "assets", "get-pip.py");
-            await downloadFile(new Uri("https://bootstrap.pypa.io/get-pip.py"), destination);
-            this.Close();
         }
 
         // One quick HTTPS request to the host the downloads come from. Pings are dropped by many
