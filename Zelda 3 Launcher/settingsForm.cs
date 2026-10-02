@@ -1082,6 +1082,7 @@ namespace Zelda_3_Launcher
             while (!process.HasExited)
             {
                 Application.DoEvents();
+                Thread.Sleep(50);   // keep the window alive without pegging a core
             }
 
             processes.Remove(process);
