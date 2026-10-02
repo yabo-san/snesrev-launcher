@@ -118,9 +118,9 @@ jobs:
           @echo off
           rem Built by the snesrev launcher. Same line as run_with_tcc.bat at ${{ matrix.repo }}@${{ matrix.commit }}, without the run.
           set SDL2=third_party\SDL2-${{ matrix.sdl }}
-          third_party	cc	cc.exe -o${{ matrix.exe }} -DCOMPILER_TCC=1 -DSTBI_NO_SIMD=1 -DHAVE_STDINT_H=1 -D_HAVE_STDINT_H=1 -DSYSTEM_VOLUME_MIXER_AVAILABLE=0 -I%SDL2%/include -L%SDL2%/lib/x64 -lSDL2 -I. ${{ matrix.sources }}
+          third_party\tcc\tcc.exe -o${{ matrix.exe }} -DCOMPILER_TCC=1 -DSTBI_NO_SIMD=1 -DHAVE_STDINT_H=1 -D_HAVE_STDINT_H=1 -DSYSTEM_VOLUME_MIXER_AVAILABLE=0 -I%SDL2%/include -L%SDL2%/lib/x64 -lSDL2 -I. ${{ matrix.sources }}
           if errorlevel 1 exit /b 1
-          copy /Y %SDL2%\libd\SDL2.dll .
+          copy /Y %SDL2%\lib\x64\SDL2.dll .
           "@ | Set-Content "$out/build.cmd" -Encoding ascii
           "snesrev ${{ matrix.repo }} @ ${{ matrix.commit }}`nTCC ${{ matrix.tcc }}`nSDL2 ${{ matrix.sdl }}`nassembled by $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" | Set-Content "$out/KIT.txt"
 
