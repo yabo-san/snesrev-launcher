@@ -1,8 +1,8 @@
 # snesrev launcher
 
-One launcher for every [snesrev](https://github.com/snesrev) PC port: **Zelda 3 (A Link to the
-Past)**, **Super Metroid**, **Super Mario World**, and from the Super Mario All-Stars ROM, **Super Mario
-Bros.** and **The Lost Levels**. Pick the game, point it at your ROM folder, press Download, press Launch.
+One launcher for the [snesrev](https://github.com/snesrev) PC ports: **Zelda 3 (A Link to the Past)**,
+**Super Metroid** and **Super Mario World**. Pick the game, point it at your ROM folder, press Download,
+press Launch.
 
 A fork of [RadzPrower's Zelda 3 Launcher](https://github.com/RadzPrower/Zelda-3-Launcher) (and its
 [Super Metroid conversion](https://github.com/RadzPrower/Super-Metroid-Launcher)). His UI, his settings
@@ -19,7 +19,11 @@ and keymapper windows; this fork makes it one launcher for all three games and m
 | Zelda 3 | A Link to the Past, USA (other languages via Settings) |
 | Super Metroid | Super Metroid (Japan, USA) |
 | Super Mario World | Super Mario World, USA |
-| Super Mario Bros. / The Lost Levels | Super Mario World USA **and** Super Mario All-Stars USA (not the "+ World" cart) |
+
+**Not set up on purpose: Super Mario Bros. and The Lost Levels.** snesrev's smw can also run those two
+from the Super Mario All-Stars ROM. I didn't wire it in because I'd rather people play the original
+NES games than a port of a port. The hook is there (an extra ROM per game, `ExtraRom` in `Game.cs`)
+if you want it in your own build.
 
 That's it. No .NET to install, no Python, no compiler to set up.
 
@@ -40,9 +44,8 @@ pipeline:
 1. Pick the game at the top.
 2. **Choose ROM folder** once. It's remembered in `launcher.json` next to the exe.
 3. **Download**: fetches the port's source, your ROM, the compiler and SDL, builds the game. A few
-   minutes the first time. Zelda 3, Super Mario World and the All-Stars games also extract their
-   assets from the ROM with a bundled Python; the All-Stars step unpacks SMB1 and Lost Levels from
-   the All-Stars ROM.
+   minutes the first time. Zelda 3 and Super Mario World also extract their assets from the ROM
+   with a bundled Python.
 4. **Launch**.
 5. **Settings** (Zelda 3): RadzPrower's full settings and keymapper windows, below. Super Metroid and
    Super Mario World open their `.ini` in Notepad; see each port's README for the keys.
