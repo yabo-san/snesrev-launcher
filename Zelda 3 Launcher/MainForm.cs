@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text;
-using LibGit2Sharp;
 
 namespace Zelda_3_Launcher
 {
@@ -55,15 +54,15 @@ namespace Zelda_3_Launcher
             this.launch.Enabled = false;
             this.settings.Enabled = false;
 
-            using (progressForm cloneRepo = new progressForm("Repository Download", "Downloading a fresh copy of the " + game.Dir + " repository..."))
+            using (progressForm getGame = new progressForm("Game Download", "Downloading " + game.Name + " build kit..."))
             {
-                if (cloneRepo.ShowDialog() == DialogResult.OK)
+                if (getGame.ShowDialog() == DialogResult.OK)
                 {
-                    cloneRepo.Dispose();
+                    getGame.Dispose();
                 }
             }
 
-            if (!Directory.Exists(Program.repoDir))
+            if (!File.Exists(Path.Combine(Program.repoDir, "build.cmd")))
             {
                 ExitBuild();
                 return;
@@ -84,40 +83,7 @@ namespace Zelda_3_Launcher
                 return;
             }
 
-            using (progressForm downloadTCC = new progressForm("Downloading TCC", "Downloading TCC build tools..."))
-            {
-                if (downloadTCC.ShowDialog() == DialogResult.OK)
-                {
-                    downloadTCC.Dispose();
-                }
-            }
-
-            using (progressForm downloadSDL2 = new progressForm("Downloading SDL2", "Downloading SDL2..."))
-            {
-                if (downloadSDL2.ShowDialog() == DialogResult.OK)
-                {
-                    downloadSDL2.Dispose();
-                }
-            }
-
-            if (game.ExtractAssets)
-            using (progressForm downloadPython = new progressForm("Downloading Python", "Downloading Python..."))
-            {
-                if (downloadPython.ShowDialog() == DialogResult.OK)
-                {
-                    downloadPython.Dispose();
-                }
-            }
-            if (game.PipPackages.Length > 0)
-            using (progressForm downloadPip = new progressForm("Downloading pip", "Downloading pip..."))
-            {
-                if (downloadPip.ShowDialog() == DialogResult.OK)
-                {
-                    downloadPip.Dispose();
-                }
-            }
-
-            this.build.Text = "Building...";
+            this.build.Text = "Preparing...";
 
             progressCompile.Visible = true;
             labelCompileStatus.Visible = true;
@@ -125,51 +91,10 @@ namespace Zelda_3_Launcher
 
             if (game.ExtractAssets)
             {
-                var pythonEXE = @".\assets\python.exe";
-                var python311 = Path.Combine(Program.repoDir, "assets", "python311._pth");
-                var python311Old = python311 + ".old";
-
-                File.AppendAllText(Program.logFile, "Starting commandline processess...");
-
+                // The kit carries its own python\ with the packages the step needs already installed.
                 progressCompile.Value++;
-                labelCompileStatus.Text = "Modifying python311._pth...";
-                // Modify python311._pth to allow for pip installation
-                File.Move(python311, python311Old);
-                using (var pythonFile = File.AppendText(python311))
-                {
-                    foreach (var line in File.ReadLines(python311Old))
-                    {
-                        if (line == "#import site") pythonFile.WriteLine("import site");
-                        else pythonFile.WriteLine(line);
-                    }
-                }
-                File.Delete(python311Old);
-
-                // pip and packages only for games whose asset step needs them (zelda3, All-Stars)
-                if (game.PipPackages.Length > 0)
-                {
-                    // Install pip
-                    progressCompile.Value++;
-                    labelCompileStatus.Text = "Installing pip...";
-                    if (runProcess("cmd.exe", "/C " + pythonEXE + @" .\assets\get-pip.py"))
-                    {
-                        MessageBox.Show("Error occurred while installing pip.\n\nPlease refer to " + Program.logFile + " for further details.");
-                        return;
-                    }
-
-                    // Install dependencies, pinned
-                    progressCompile.Value++;
-                    labelCompileStatus.Text = "Installing dependencies...";
-                    if (runProcess("cmd.exe", @"/C " + pythonEXE + " -m pip install " + string.Join(" ", game.PipPackages)))
-                    {
-                        MessageBox.Show("Error occurred while installing dependencies.\n\nPlease refer to " + Program.logFile + " for further details.");
-                        return;
-                    }
-                }
-
-                // Extract assets
-                progressCompile.Value++;
-                labelCompileStatus.Text = "Extracting assets...";
+                labelCompileStatus.Text = "Extracting assets from the ROM...";
+                File.AppendAllText(Program.logFile, "Extracting assets...");
                 if (runProcess("cmd.exe", "/C " + game.AssetCommand))
                 {
                     MessageBox.Show("Error occurred while extracting resources.\n\nPlease refer to " + Program.logFile + " for further details.");
@@ -177,30 +102,14 @@ namespace Zelda_3_Launcher
                 }
             }
 
-            // Need to make some small modifications to bat before exectuting
-            progressCompile.Value++;
-            labelCompileStatus.Text = "Modifying installation bat...";
-            var batOld = Path.Combine(Program.repoDir, "run_with_tcc.bat");
-            var batNew = Path.Combine(Program.repoDir, "radzprower.bat");
-            if (File.Exists(batNew)) File.Delete(batNew);
-            using (var pythonFile = File.AppendText(batNew))
-            {
-                foreach (var line in File.ReadLines(batOld))
-                {
-                    var t = line.Trim();
-                    if (t == "pause") ;
-                    else if (t == "echo Running...") ;
-                    else if (t.StartsWith(game.Exe, StringComparison.OrdinalIgnoreCase)) ;
-                    else pythonFile.WriteLine(line);
-                }
-            }
-
-            // build the game exe
+            // The kit's build.cmd: the port's own compile line, with the TCC and SDL2 the kit carries.
+            // Same bytes CI compiled when it verified the kit.
+            this.build.Text = "Building...";
             progressCompile.Value++;
             labelCompileStatus.Text = "Building " + game.Exe + "...";
-            if (runProcess("cmd.exe", @"/C radzprower.bat"))
+            if (runProcess("cmd.exe", "/C build.cmd"))
             {
-                MessageBox.Show("Error occurred while building executable.\n\nPlease refer to " + Program.logFile + " for further details.");
+                MessageBox.Show("Error occurred while building " + game.Exe + ".\n\nPlease refer to " + Program.logFile + " for further details.");
                 return;
             }
 
@@ -265,15 +174,16 @@ namespace Zelda_3_Launcher
             this.settings.Enabled = false;
             this.launch.Text = "Launch";
             this.build.Text = "Download";
-            if (Directory.Exists(Path.Combine(Program.repoDir, ".git")))
+            var marker = Path.Combine(Program.repoDir, Game.PackageMarker);
+            if (File.Exists(marker))
             {
-                Repository repo = new Repository(Program.repoDir);
-
-                var status = repo.RetrieveStatus();
-
-                if (repo.Head.TrackingDetails.BehindBy > 0) this.build.Text = "Update";
-                else if (status.IsDirty) this.build.Text = "Restore";
-                else this.build.Text = "Re-build";
+                // This launcher's package on disk: a press redoes the ROM and asset steps. Another
+                // version's package, or a folder from the old clone-and-build launcher: updates.
+                this.build.Text = File.ReadAllText(marker).Trim() == Game.LauncherVersion ? "Re-build" : "Update";
+            }
+            else if (Directory.Exists(Program.repoDir))
+            {
+                this.build.Text = "Update";
             }
             this.build.Enabled = true;
 
@@ -426,7 +336,7 @@ namespace Zelda_3_Launcher
             // 
             this.progressCompile.Location = new System.Drawing.Point(8, 263);
             this.progressCompile.MarqueeAnimationSpeed = 10;
-            this.progressCompile.Maximum = 6;
+            this.progressCompile.Maximum = 3;
             this.progressCompile.Name = "progressCompile";
             this.progressCompile.Size = new System.Drawing.Size(175, 23);
             this.progressCompile.Step = 1;

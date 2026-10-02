@@ -27,6 +27,15 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  # The three game packages, built from pinned snesrev commits, attached to the same release.
+  games:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/games.yml
+    with:
+      upload_to: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
+
   build:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}

@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 
 namespace Zelda_3_Launcher
@@ -10,74 +11,63 @@ namespace Zelda_3_Launcher
         public string[] Sha1 { get; init; } = Array.Empty<string>();
     }
 
-    // One snesrev port. Everything the launcher used to hardcode for Zelda 3 lives here, so the
-    // same download/build/launch flow works for each game. Entries may share a Dir and launch the
-    // same exe with different arguments (LaunchArgs).
+    // One snesrev port. This repo's CI (.github/workflows/games.yml) assembles a build kit per game
+    // from a pinned snesrev commit: the source, TCC, SDL2, an embedded Python where the asset step
+    // needs one, and build.cmd with the port's own compile line. CI compiles a copy to prove the kit
+    // builds, then attaches the kit (not the compiled game) to every release as <Dir>-win-x64.zip.
+    // The launcher downloads that kit, finds the ROM by hash, runs the asset step, runs build.cmd.
     public sealed class Game
     {
         public string Id { get; init; } = "";
         public string Name { get; init; } = "";
-        public string RepoUrl { get; init; } = "";
-        public string Dir { get; init; } = "";            // folder next to the launcher
+        public string Dir { get; init; } = "";            // folder next to the launcher; also the package name
         public string Rom { get; init; } = "";            // file name the port expects
         public string Exe { get; init; } = "";
         public string LaunchArgs { get; init; } = "";     // passed to Exe on launch, if any
         public string Ini { get; init; } = "";
         public string[] Sha1 { get; init; } = Array.Empty<string>(); // accepted ROM hashes, upper case, no copier header
         public ExtraRom[] ExtraRoms { get; init; } = Array.Empty<ExtraRom>();
-        public string SdlVersion { get; init; } = "";     // the version the game's run_with_tcc.bat expects
-        public string TccUrl { get; init; } = "";
-        // Asset step, run before the build with the bundled Python: PipPackages installed first
-        // (pinned), then AssetCommand run by cmd in the game dir. Empty = no Python needed.
-        public string[] PipPackages { get; init; } = Array.Empty<string>();
+        // Asset step, run by cmd in the game dir after the ROM is in place, using the kit's own
+        // python\python.exe. Empty = the port reads the ROM directly.
         public string AssetCommand { get; init; } = "";
         public bool FullSettings { get; init; }           // the settings and keymapper forms are written for zelda3.ini
 
         public bool ExtractAssets => AssetCommand.Length > 0;
-        public string SdlUrl => $"https://github.com/libsdl-org/SDL/releases/download/release-{SdlVersion}/SDL2-devel-{SdlVersion}-VC.zip";
 
-        const string SmwRepo = "https://github.com/snesrev/smw.git";
-        const string SmwSha1 = "6B47BB75D16514B6A476AA0C73A683A2A4C18765";          // USA
-        const string Tcc2023 = "https://github.com/FitzRoyX/tinycc/releases/download/tcc_20230519/tcc_20230519.zip";
-        // smw builds smw_assets.dat from the ROM with assets/restool.py (standard library only).
-        const string SmwAssets = "cd .\\assets && python restool.py";
-        // Not set up on purpose: smw can also run Super Mario Bros. and The Lost Levels from the
-        // Super Mario All-Stars ROM (smas.sfc in other/, sha1 C05817C5..., other/extract.py with
-        // zstandard, then smw.exe smb1.sfc / smbll.sfc). Purposely not implemented; feel free to
-        // wire it in. ExtraRoms + LaunchArgs are the hook.
+        // The kit for this game, from the same release as the running launcher, so the two always
+        // match. Written next to the game after a download as PackageMarker.
+        public static readonly string LauncherVersion = (Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0)).ToString(3);
+        public const string Releases = "https://github.com/yabo-san/snesrev-launcher/releases/download";
+        public string PackageUrl => $"{Releases}/v{LauncherVersion}/{Dir}-win-x64.zip";
+        public const string PackageMarker = ".snesrev-package";
 
         public static readonly Game[] All =
         {
             new Game
             {
-                Id = "zelda3", Name = "Zelda 3 (A Link to the Past)",
-                RepoUrl = "https://github.com/snesrev/zelda3.git", Dir = "zelda3",
+                Id = "zelda3", Name = "Zelda 3 (A Link to the Past)", Dir = "zelda3",
                 Rom = "zelda3.sfc", Exe = "zelda3.exe", Ini = "zelda3.ini",
                 Sha1 = new[] { "6D4F10A8B10E10DBE624CB23CF03B88BB8252973" },
-                SdlVersion = "2.26.3",
-                TccUrl = "https://github.com/FitzRoyX/tinycc/releases/download/tcc_20221020/tcc_20221020.zip",
-                PipPackages = new[] { "pillow==11.3.0", "pyyaml==6.0.2" },
-                AssetCommand = "cd .\\assets && python restool.py --extract-from-rom",
+                AssetCommand = "cd .\\assets && ..\\python\\python.exe restool.py --extract-from-rom",
                 FullSettings = true,
             },
             new Game
             {
-                Id = "sm", Name = "Super Metroid",
-                RepoUrl = "https://github.com/snesrev/sm.git", Dir = "sm",
+                Id = "sm", Name = "Super Metroid", Dir = "sm",
                 Rom = "sm.smc", Exe = "sm.exe", Ini = "sm.ini",
                 Sha1 = new[] { "DA957F0D63D14CB441D215462904C4FA8519C613" },
-                SdlVersion = "2.24.1",
-                TccUrl = "https://github.com/FitzRoyX/tinycc/releases/download/tcc_20221020/tcc_20221020.zip",
             },
             new Game
             {
-                Id = "smw", Name = "Super Mario World",
-                RepoUrl = SmwRepo, Dir = "smw",
+                Id = "smw", Name = "Super Mario World", Dir = "smw",
                 Rom = "smw.sfc", Exe = "smw.exe", Ini = "smw.ini",
-                Sha1 = new[] { SmwSha1 },
-                SdlVersion = "2.28.1", TccUrl = Tcc2023,
-                AssetCommand = SmwAssets,
+                Sha1 = new[] { "6B47BB75D16514B6A476AA0C73A683A2A4C18765" },
+                AssetCommand = "cd .\\assets && ..\\python\\python.exe restool.py",
             },
+            // Not set up on purpose: smw can also run Super Mario Bros. and The Lost Levels from the
+            // Super Mario All-Stars ROM (smas.sfc in other/, sha1 C05817C5..., other/extract.py with
+            // zstandard, then smw.exe smb1.sfc / smbll.sfc). Purposely not implemented; feel free to
+            // wire it in. ExtraRoms + LaunchArgs are the hook; the kit would need other/ and zstandard.
         };
 
         public static Game ById(string? id) => All.FirstOrDefault(g => g.Id == id) ?? All[0];
