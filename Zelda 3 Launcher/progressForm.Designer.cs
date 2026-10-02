@@ -38,7 +38,7 @@ namespace Zelda_3_Launcher
             }
         }
 
-        private void copyROM(object sender, EventArgs e)
+        private async void copyROM(object sender, EventArgs e)
         {
             this.Refresh();
             var game = Program.game;
@@ -58,11 +58,13 @@ namespace Zelda_3_Launcher
             }
 
             // Look in the user's ROM folder first: any .sfc/.smc whose hash matches this game.
-            var found = FindRom(Program.settings.RomFolder, game.Sha1);
+            // Hashing a whole ROM set, especially over a network share, takes seconds, so it runs
+            // off the UI thread with the file being checked shown in the label.
+            var found = await FindRomAsync(Program.settings.RomFolder, game.Sha1, game.Rom);
             if (found != null)
             {
                 WriteRom(found, target);
-                if (CopyExtraRoms(game)) { this.Close(); return; }
+                if (await CopyExtraRoms(game)) { this.Close(); return; }
                 File.Delete(target);   // an extra ROM is missing: cancel, so the build does not start
                 this.Close();
                 return;
@@ -80,7 +82,7 @@ namespace Zelda_3_Launcher
                     if (hashCheck.success)
                     {
                         WriteRom(result.FileName, target);
-                        if (!CopyExtraRoms(game)) File.Delete(target);
+                        if (!await CopyExtraRoms(game)) File.Delete(target);
                         exit = true;
                     }
                     else
@@ -105,13 +107,13 @@ namespace Zelda_3_Launcher
 
         // Each extra ROM the game needs (All-Stars): found by hash in the ROM folder, else asked for.
         // Returns false if one is missing, which cancels the build.
-        private bool CopyExtraRoms(Game game)
+        private async Task<bool> CopyExtraRoms(Game game)
         {
             foreach (var extra in game.ExtraRoms)
             {
                 var dest = Path.Combine(Program.repoDir, extra.SubDir, extra.Name);
                 if (File.Exists(dest)) continue;
-                var file = FindRom(Program.settings.RomFolder, extra.Sha1);
+                var file = await FindRomAsync(Program.settings.RomFolder, extra.Sha1, extra.Name);
                 if (file == null)
                 {
                     var dlg = new OpenFileDialog { Filter = extra.Name + " (*.sfc;*.smc)|*.sfc;*.smc", Title = game.Name + " also needs " + extra.Name };
@@ -128,8 +130,17 @@ namespace Zelda_3_Launcher
             return true;
         }
 
-        // Scans the ROM folder (and its subfolders) for a file matching one of the hashes.
-        public static string? FindRom(string folder, string[] sha1s)
+        // Scans the ROM folder (and its subfolders) for a file matching one of the hashes, on a
+        // worker thread; the label shows what is being checked.
+        private async Task<string?> FindRomAsync(string folder, string[] sha1s, string wanted)
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return null;
+            progBar.Style = ProgressBarStyle.Marquee;
+            var progress = new Progress<string>(name => updateLabel.Text = "Looking for " + wanted + ": " + name);
+            return await Task.Run(() => FindRom(folder, sha1s, progress));
+        }
+
+        public static string? FindRom(string folder, string[] sha1s, IProgress<string>? progress = null)
         {
             if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return null;
             var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
@@ -140,6 +151,7 @@ namespace Zelda_3_Launcher
                 try
                 {
                     if (new FileInfo(file).Length > 8 * 1024 * 1024) continue;
+                    progress?.Report(Path.GetFileName(file));
                     if (sha1s.Contains(Sha1Of(RomBytes(file)))) return file;
                 }
                 catch { }
