@@ -1,4 +1,5 @@
-﻿using System.Data;
+using System.Net.Http;
+using System.Data;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -13,7 +14,6 @@ namespace Zelda_3_Launcher
     {
         private bool saving = false;
 
-        private static volatile int progress = 0;
 
         public settingsForm()
         {
@@ -231,43 +231,21 @@ namespace Zelda_3_Launcher
         {
             var filename = "zelda3.ini";
             Uri uri = new Uri("https://raw.githubusercontent.com/snesrev/zelda3/master/zelda3.ini");
-
-            var directory = Path.Combine(Program.repoDir, "saves");
             var destination = Path.Combine(Program.repoDir, "saves", filename);
+            Directory.CreateDirectory(Path.Combine(Program.repoDir, "saves"));
 
-            if (!progressForm.IsConnectedToInternet())
+            try
             {
-                MessageBox.Show("Your INI backup file is missing and you are unable to connect to the internet to download a fresh copy.\n\nPlease ensure you have a stable internet connection before attempting to reset settings.",
-                    "No Connection", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+                var bytes = http.GetByteArrayAsync(uri).GetAwaiter().GetResult();
+                File.WriteAllBytes(destination, bytes);
             }
-
-            Task.Run(() =>
+            catch (Exception ex)
             {
-                using (var client = new WebClient())
-                {
-                    if (!Directory.Exists(directory))
-                    {
-                        Directory.CreateDirectory(directory);
-                    }
-                    client.DownloadProgressChanged += new DownloadProgressChangedEventHandler(downloadProgress);
-                    client.DownloadFileAsync(uri, destination);
-                }
-            });
-
-            while (!File.Exists(destination))
-            {
-                Application.DoEvents();
+                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " fresh ini: " + ex + "\n");
+                MessageBox.Show("Your INI backup file is missing and a fresh copy could not be downloaded.\n\n" + ex.Message,
+                    "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-
-            do
-            {
-            } while (progress < 100);
-        }
-
-        private static void downloadProgress(object sender, DownloadProgressChangedEventArgs e)
-        {
-            progress = e.ProgressPercentage;
         }
 
         private void buttonSave_Click(object sender, EventArgs e)
