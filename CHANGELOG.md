@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1](https://github.com/yabo-san/snesrev-launcher/compare/v1.5.0...v1.5.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* ROM search off the UI thread (hitch after choosing the ROM folder) ([ca17151](https://github.com/yabo-san/snesrev-launcher/commit/ca1715122086127168998bd011ce3c6083e7681d))
+* ROM search runs off the UI thread; the window stayed frozen after choosing the ROM folder ([e1fc186](https://github.com/yabo-san/snesrev-launcher/commit/e1fc1864dc7921d444029d8665da61ec8046e355))
+
 ## [1.5.0](https://github.com/yabo-san/snesrev-launcher/compare/v1.4.0...v1.5.0) (2026-10-02)
 
 
