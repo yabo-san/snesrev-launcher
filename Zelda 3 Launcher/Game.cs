@@ -43,8 +43,8 @@ namespace Zelda_3_Launcher
         const string SmwAssets = "cd .\\assets && python restool.py";
         // Not set up on purpose: smw can also run Super Mario Bros. and The Lost Levels from the
         // Super Mario All-Stars ROM (smas.sfc in other/, sha1 C05817C5..., other/extract.py with
-        // zstandard, then smw.exe smb1.sfc / smbll.sfc). The owner would rather people play the
-        // original NES games than a port of a port. ExtraRoms + LaunchArgs are the hook if you want it.
+        // zstandard, then smw.exe smb1.sfc / smbll.sfc). Purposely not implemented; feel free to
+        // wire it in. ExtraRoms + LaunchArgs are the hook.
 
         public static readonly Game[] All =
         {

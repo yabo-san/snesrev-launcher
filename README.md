@@ -20,10 +20,9 @@ and keymapper windows; this fork makes it one launcher for all three games and m
 | Super Metroid | Super Metroid (Japan, USA) |
 | Super Mario World | Super Mario World, USA |
 
-**Not set up on purpose: Super Mario Bros. and The Lost Levels.** snesrev's smw can also run those two
-from the Super Mario All-Stars ROM. I didn't wire it in because I'd rather people play the original
-NES games than a port of a port. The hook is there (an extra ROM per game, `ExtraRom` in `Game.cs`)
-if you want it in your own build.
+**Super Mario Bros. and The Lost Levels (All-Stars): not implemented.** snesrev's smw can run those two
+from the Super Mario All-Stars ROM. I purposely didn't bother implementing them. Feel free to wire it
+in; the hook is there (an extra ROM per game, `ExtraRom` in `Game.cs`).
 
 That's it. No .NET to install, no Python, no compiler to set up.
 
