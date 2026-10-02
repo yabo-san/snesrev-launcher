@@ -58,10 +58,12 @@ namespace Zelda_3_Launcher
             }
 
             // Look in the user's ROM folder first: any .sfc/.smc whose hash matches this game.
-            var found = FindRom(Program.settings.RomFolder, game);
+            var found = FindRom(Program.settings.RomFolder, game.Sha1);
             if (found != null)
             {
                 WriteRom(found, target);
+                if (CopyExtraRoms(game)) { this.Close(); return; }
+                File.Delete(target);   // an extra ROM is missing: cancel, so the build does not start
                 this.Close();
                 return;
             }
@@ -78,6 +80,7 @@ namespace Zelda_3_Launcher
                     if (hashCheck.success)
                     {
                         WriteRom(result.FileName, target);
+                        if (!CopyExtraRoms(game)) File.Delete(target);
                         exit = true;
                     }
                     else
@@ -100,8 +103,33 @@ namespace Zelda_3_Launcher
             this.Close();
         }
 
-        // Scans the ROM folder (and its subfolders) for a file matching the game's hash.
-        public static string? FindRom(string folder, Game game)
+        // Each extra ROM the game needs (All-Stars): found by hash in the ROM folder, else asked for.
+        // Returns false if one is missing, which cancels the build.
+        private bool CopyExtraRoms(Game game)
+        {
+            foreach (var extra in game.ExtraRoms)
+            {
+                var dest = Path.Combine(Program.repoDir, extra.SubDir, extra.Name);
+                if (File.Exists(dest)) continue;
+                var file = FindRom(Program.settings.RomFolder, extra.Sha1);
+                if (file == null)
+                {
+                    var dlg = new OpenFileDialog { Filter = extra.Name + " (*.sfc;*.smc)|*.sfc;*.smc", Title = game.Name + " also needs " + extra.Name };
+                    if (Directory.Exists(Program.settings.RomFolder)) dlg.InitialDirectory = Program.settings.RomFolder;
+                    if (dlg.ShowDialog() != DialogResult.OK) { MessageBox.Show(game.Name + " needs " + extra.Name + " too. Process cancelled.", "ROM missing"); return false; }
+                    var yours = Sha1Of(RomBytes(dlg.FileName));
+                    if (!extra.Sha1.Contains(yours) &&
+                        MessageBox.Show("This file's hash (" + yours + ") is not the one the port expects (" + string.Join(" or ", extra.Sha1) + ").\n\nUse it anyway?", "ROM Hash Mismatch", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                        return false;
+                    file = dlg.FileName;
+                }
+                WriteRom(file, dest);
+            }
+            return true;
+        }
+
+        // Scans the ROM folder (and its subfolders) for a file matching one of the hashes.
+        public static string? FindRom(string folder, string[] sha1s)
         {
             if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return null;
             var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
@@ -112,7 +140,7 @@ namespace Zelda_3_Launcher
                 try
                 {
                     if (new FileInfo(file).Length > 8 * 1024 * 1024) continue;
-                    if (game.Sha1.Contains(Sha1Of(RomBytes(file)))) return file;
+                    if (sha1s.Contains(Sha1Of(RomBytes(file)))) return file;
                 }
                 catch { }
             }

@@ -28,7 +28,7 @@ namespace Zelda_3_Launcher
 
             this.launch.Text = "Running...";
             this.WindowState = FormWindowState.Minimized;
-            if (runProcess("cmd.exe", "/C " + Program.game.Exe))
+            if (runProcess("cmd.exe", "/C " + Program.game.Exe + (Program.game.LaunchArgs.Length > 0 ? " " + Program.game.LaunchArgs : "")))
             {
                 MessageBox.Show("Error occurred while launching " + Program.game.Name + ".\n\nPlease refer to " + Program.logFile + " for further details.");
             }
@@ -108,7 +108,7 @@ namespace Zelda_3_Launcher
                     downloadPython.Dispose();
                 }
             }
-            if (game.ExtractAssets)
+            if (game.PipPackages.Length > 0)
             using (progressForm downloadPip = new progressForm("Downloading pip", "Downloading pip..."))
             {
                 if (downloadPip.ShowDialog() == DialogResult.OK)
@@ -145,28 +145,32 @@ namespace Zelda_3_Launcher
                 }
                 File.Delete(python311Old);
 
-                // Download pip
-                progressCompile.Value++;
-                labelCompileStatus.Text = "Downloading pip...";
-                if (runProcess("cmd.exe", "/C " + pythonEXE + @" .\assets\get-pip.py"))
+                // pip and packages only for games whose asset step needs them (zelda3, All-Stars)
+                if (game.PipPackages.Length > 0)
                 {
-                    MessageBox.Show("Error occurred while downloding pip.\n\nPlease refer to " + Program.logFile + " for further details.");
-                    return;
-                }
+                    // Install pip
+                    progressCompile.Value++;
+                    labelCompileStatus.Text = "Installing pip...";
+                    if (runProcess("cmd.exe", "/C " + pythonEXE + @" .\assets\get-pip.py"))
+                    {
+                        MessageBox.Show("Error occurred while installing pip.\n\nPlease refer to " + Program.logFile + " for further details.");
+                        return;
+                    }
 
-                // Install dependencies
-                progressCompile.Value++;
-                labelCompileStatus.Text = "Installing dependencies...";
-                if (runProcess("cmd.exe", @"/C " + pythonEXE + " -m pip install pillow==11.3.0 pyyaml==6.0.2"))
-                {
-                    MessageBox.Show("Error occurred while installing/updating dependencies.\n\nPlease refer to " + Program.logFile + " for further details.");
-                    return;
+                    // Install dependencies, pinned
+                    progressCompile.Value++;
+                    labelCompileStatus.Text = "Installing dependencies...";
+                    if (runProcess("cmd.exe", @"/C " + pythonEXE + " -m pip install " + string.Join(" ", game.PipPackages)))
+                    {
+                        MessageBox.Show("Error occurred while installing dependencies.\n\nPlease refer to " + Program.logFile + " for further details.");
+                        return;
+                    }
                 }
 
                 // Extract assets
                 progressCompile.Value++;
                 labelCompileStatus.Text = "Extracting assets...";
-                if (runProcess("cmd.exe", @"/C cd .\assets && python restool.py --extract-from-rom"))
+                if (runProcess("cmd.exe", "/C " + game.AssetCommand))
                 {
                     MessageBox.Show("Error occurred while extracting resources.\n\nPlease refer to " + Program.logFile + " for further details.");
                     return;
