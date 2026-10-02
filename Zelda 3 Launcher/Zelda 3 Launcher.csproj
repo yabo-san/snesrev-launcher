@@ -1,8 +1,15 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
-		<TargetFramework>net7.0-windows</TargetFramework>
+		<TargetFramework>net10.0-windows</TargetFramework>
+		<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<!-- One self-contained exe; here rather than on the command line so restore and publish agree (lock file). -->
+		<SelfContained>true</SelfContained>
+		<PublishSingleFile>true</PublishSingleFile>
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
 		<RootNamespace>Zelda_3_Launcher</RootNamespace>
 		<Nullable>enable</Nullable>
 		<UseWindowsForms>true</UseWindowsForms>
@@ -53,8 +60,5 @@
 	  </EmbeddedResource>
 	</ItemGroup>
 
-	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-	  <Exec Command="copy &quot;$(TargetDir)runtimes\win-x64\native\*&quot; &quot;$(TargetDir)&quot;&#xD;&#xA;RD /S /Q &quot;$(TargetDir)runtimes&quot;" />
-	</Target>
 
 </Project>
