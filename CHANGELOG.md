@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.0](https://github.com/yabo-san/snesrev-launcher/compare/v1.4.0...v1.5.0) (2026-10-02)
+
+
+### Features
+
+* Super Mario Bros. and The Lost Levels from the All-Stars ROM; Super Mario World's asset step ([237c0e1](https://github.com/yabo-san/snesrev-launcher/commit/237c0e1573fb0f92b71bfa1e02717561acd0d4e6))
+* Super Mario World's asset step; All-Stars deliberately not set up ([69a4a61](https://github.com/yabo-san/snesrev-launcher/commit/69a4a6169fae79f028d9907a77e42d12fe16025b))
+* Super Mario World's asset step; All-Stars deliberately not set up ([036b1ad](https://github.com/yabo-san/snesrev-launcher/commit/036b1ad1a62ef15895550171319cb63f395cbf8d))
+
 ## [1.4.0](https://github.com/yabo-san/snesrev-launcher/compare/v1.3.6...v1.4.0) (2026-10-02)
 
 
