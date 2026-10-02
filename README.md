@@ -58,8 +58,8 @@ something fails.
 - One launcher, three games. The game list is `Game.cs`; adding a port is one entry.
 - Finds your ROM by hash in a folder you choose, instead of asking for the file every time. Headered
   ROMs are accepted. A mismatched hash warns but lets you continue.
-- Does not freeze. Downloads and the git clone run off the UI thread; the old "is the internet up?"
-  ping, which many networks drop, is one quick HTTPS request.
+- Downloads, the git clone and the ROM search run on a worker thread instead of the UI thread. The
+  connectivity check is one HTTPS request to github.com instead of pings.
 - Runs on a supported .NET (10, LTS) as one self-contained exe. The original targeted .NET 7, out of
   support since May 2024, and would not start without that exact runtime.
 - Pinned everything: the .NET SDK (`global.json`), NuGet packages (`packages.lock.json`), the Python
