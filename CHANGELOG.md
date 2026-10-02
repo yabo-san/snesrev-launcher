@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/yabo-san/snesrev-launcher/compare/v1.5.1...v1.6.0) (2026-10-02)
+
+
+### Features
+
+* CI-verified build kit per game; no git, no tool downloads on the user's PC ([5edb9eb](https://github.com/yabo-san/snesrev-launcher/commit/5edb9eb23badc614f5f5f13e2abd8664fb8d9997))
+
 ## [1.5.1](https://github.com/yabo-san/snesrev-launcher/compare/v1.5.0...v1.5.1) (2026-10-02)
 
 
