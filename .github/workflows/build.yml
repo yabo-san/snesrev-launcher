@@ -1,0 +1,47 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      # The SDK version comes from global.json, so CI and local builds match.
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      # --locked-mode fails if a package changed without the lock file being updated.
+      - name: Restore
+        run: dotnet restore "Zelda 3 Launcher.sln" --locked-mode
+
+      - name: Build
+        run: dotnet build "Zelda 3 Launcher.sln" -c Release --no-restore
+
+      # Single-file, self-contained and compressed: set in the .csproj.
+      - name: Publish
+        run: dotnet publish "Zelda 3 Launcher/Zelda 3 Launcher.csproj" -c Release --no-restore -o publish
+
+      - name: Size
+        shell: pwsh
+        run: Get-ChildItem publish | Format-Table Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snesrev-launcher-win-x64
+          path: publish/
+          retention-days: 14

@@ -1,0 +1,70 @@
+name: Release
+
+# Conventional commits on master feed release-please, which keeps a release PR open. Merging that
+# PR tags the version and publishes a GitHub release; this workflow then builds the exe on a Windows
+# runner, attests it, and attaches it to the release. Nothing is built or uploaded by hand.
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: windows-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Restore
+        run: dotnet restore "Zelda 3 Launcher.sln" --locked-mode
+
+      - name: Publish
+        run: dotnet publish "Zelda 3 Launcher/Zelda 3 Launcher.csproj" -c Release --no-restore -o publish
+
+      - name: Name the asset
+        shell: pwsh
+        run: |
+          $v = $env:TAG.TrimStart('v')
+          Copy-Item "publish/Zelda 3 Launcher.exe" "snesrev-launcher-$v-win-x64.exe"
+          Get-Item "snesrev-launcher-$v-win-x64.exe" | Format-Table Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: snesrev-launcher-*-win-x64.exe
+
+      - name: Attach to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload $env:TAG (Get-Item "snesrev-launcher-*-win-x64.exe").FullName --clobber

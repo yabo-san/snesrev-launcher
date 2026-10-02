@@ -1,4 +1,4 @@
-﻿namespace Zelda_3_Launcher
+namespace Zelda_3_Launcher
 {
     partial class MainForm
     {
@@ -20,6 +20,9 @@
             base.Dispose(disposing);
         }
 
+        private ComboBox gamePicker;
+        private Button romFolder;
+        private ToolTip toolTip;
         private Button build;
         private Button launch;
         private Button settings;

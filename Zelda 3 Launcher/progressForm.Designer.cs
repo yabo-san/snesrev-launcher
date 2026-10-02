@@ -1,18 +1,13 @@
-﻿using System.Net;
+using System.Net.Http;
 using System.Text;
 
 using LibGit2Sharp;
-using System.Net.NetworkInformation;
-using XSystem.Security.Cryptography;
 using System.IO.Compression;
 
 namespace Zelda_3_Launcher
 {
     partial class progressForm : Form
     {
-        private volatile int progress = 0;
-        private volatile int max = 999999;
-
         public progressForm(string title, string message)
         {
             InitializeComponent();
@@ -46,23 +41,35 @@ namespace Zelda_3_Launcher
         private void copyROM(object sender, EventArgs e)
         {
             this.Refresh();
+            var game = Program.game;
+            var target = Path.Combine(Program.repoDir, game.Rom);
 
-            if (File.Exists(Path.Combine(Program.repoDir, "zelda3.sfc")))
+            if (File.Exists(target))
             {
                 this.Close();
                 return;
             }
 
-            if (File.Exists(Path.Combine(Program.currentDirectory, "zelda3.sfc")))
+            if (File.Exists(Path.Combine(Program.currentDirectory, game.Rom)))
             {
-                File.Move(Path.Combine(Program.currentDirectory, "zelda3.sfc"), Path.Combine(Program.repoDir, "zelda3.sfc"));
+                File.Move(Path.Combine(Program.currentDirectory, game.Rom), target);
+                this.Close();
+                return;
+            }
+
+            // Look in the user's ROM folder first: any .sfc/.smc whose hash matches this game.
+            var found = FindRom(Program.settings.RomFolder, game);
+            if (found != null)
+            {
+                WriteRom(found, target);
                 this.Close();
                 return;
             }
 
             Boolean exit = false;
             var result = new OpenFileDialog();
-            result.Filter = "Zelda 3 ROM (*.sfc)|*.sfc";
+            result.Filter = game.Name + " ROM (*.sfc;*.smc)|*.sfc;*.smc";
+            if (Directory.Exists(Program.settings.RomFolder)) result.InitialDirectory = Program.settings.RomFolder;
             while (!exit)
             {
                 if (result.ShowDialog() == DialogResult.OK)
@@ -70,16 +77,21 @@ namespace Zelda_3_Launcher
                     var hashCheck = checkHash(result.FileName);
                     if (hashCheck.success)
                     {
-                        File.Copy(result.FileName, Path.Combine(Program.repoDir, "zelda3.sfc"));
+                        WriteRom(result.FileName, target);
                         exit = true;
                     }
                     else
                     {
-                        var answer = MessageBox.Show("ROM hash is not valid for the English (US) version.\n\n" +
-                            "The hash of the file selected is " + hashCheck.yourHash + ".\n\n" + 
-                            "The correct hash is " + hashCheck.hash + ".\n\n" +
-                            "Would you like to select another?", "Invalid ROM Hash", MessageBoxButtons.YesNo, MessageBoxIcon.Error); ;
-                        if (answer == DialogResult.No) exit = true;
+                        var answer = MessageBox.Show("This ROM's hash doesn't match the version " + game.Name + " expects.\n\n" +
+                            "The hash of the file selected is " + hashCheck.yourHash + ".\n\n" +
+                            "The expected hash is " + hashCheck.hash + ".\n\n" +
+                            "Use it anyway? Choose No to pick another file.", "ROM Hash Mismatch", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+                        if (answer == DialogResult.Yes)
+                        {
+                            WriteRom(result.FileName, target);
+                            exit = true;
+                        }
+                        else if (answer == DialogResult.Cancel) exit = true;
                     }
                 }
                 else exit = true;
@@ -88,99 +100,179 @@ namespace Zelda_3_Launcher
             this.Close();
         }
 
-        private void cloneRepo(object sender, EventArgs e)
+        // Scans the ROM folder (and its subfolders) for a file matching the game's hash.
+        public static string? FindRom(string folder, Game game)
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return null;
+            var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
+            foreach (var file in Directory.EnumerateFiles(folder, "*.*", options))
+            {
+                var ext = Path.GetExtension(file).ToLowerInvariant();
+                if (ext != ".sfc" && ext != ".smc") continue;
+                try
+                {
+                    if (new FileInfo(file).Length > 8 * 1024 * 1024) continue;
+                    if (game.Sha1.Contains(Sha1Of(RomBytes(file)))) return file;
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        // A ROM's bytes without the 512-byte copier header some dumps carry.
+        public static byte[] RomBytes(string file)
+        {
+            var bytes = File.ReadAllBytes(file);
+            return bytes.Length % 1024 == 512 ? bytes[512..] : bytes;
+        }
+
+        public static string Sha1Of(byte[] bytes) =>
+            Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(bytes));
+
+        private static void WriteRom(string source, string target)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.WriteAllBytes(target, RomBytes(source));
+        }
+
+        // Every long step runs off the UI thread and reports back through the progress bar, so the
+        // window never shows "Not Responding" and a stalled step cannot hang the launcher.
+        private async void cloneRepo(object sender, EventArgs e)
         {
             this.Refresh();
 
-            if (!IsConnectedToInternet())
+            if (!await IsConnectedToInternet())
             {
-                MessageBox.Show("Unable to connect to the internet.\n\nPlease ensure you have a stable internet connection before updating your repository.", "No Connection", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Unable to reach github.com.\n\nCheck your internet connection and try again.", "No Connection", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 this.Dispose();
                 return;
             }
 
-            var repoDir = Path.Combine(Program.currentDirectory, "zelda3");
+            var game = Program.game;
+            var repoDir = Program.repoDir;
+            progBar.Style = ProgressBarStyle.Marquee;
 
             try
             {
-                using (var repo = new Repository(repoDir))
+                await Task.Run(() =>
                 {
-                    var iniFile = Path.Combine(repoDir, "zelda3.ini");
-                    var iniBackup = Path.Combine(repoDir, "saves", "zelda3.ini");
-                    if (File.Exists(iniFile)) File.Copy(iniFile, iniBackup, true);
+                    if (Repository.IsValid(repoDir))
+                    {
+                        using var repo = new Repository(repoDir);
+                        var iniFile = Path.Combine(repoDir, game.Ini);
+                        var iniBackup = Path.Combine(repoDir, "saves", game.Ini);
+                        Directory.CreateDirectory(Path.Combine(repoDir, "saves"));
+                        if (File.Exists(iniFile)) File.Copy(iniFile, iniBackup, true);
 
-                    var trackedBranch = repo.Head.TrackedBranch;
+                        // Fetch, then reset to the remote's tip: a clean copy of upstream, keeping the ini.
+                        var remote = repo.Network.Remotes["origin"];
+                        Commands.Fetch(repo, remote.Name, remote.FetchRefSpecs.Select(r => r.Specification), new FetchOptions(), null);
+                        var tracked = repo.Head.TrackedBranch ?? repo.Branches["origin/" + repo.Head.FriendlyName] ?? repo.Branches["origin/main"] ?? repo.Branches["origin/master"];
+                        if (tracked != null)
+                            repo.Reset(ResetMode.Hard, tracked.Tip, new CheckoutOptions { OnCheckoutProgress = CheckoutProgress });
 
-                    Commit originHeadCommit = repo.ObjectDatabase.FindMergeBase(repo.Branches[trackedBranch.FriendlyName].Tip, repo.Head.Tip);
-                    repo.Reset(ResetMode.Hard, originHeadCommit,
-                        new CheckoutOptions
-                        {
-                            OnCheckoutProgress = (clonePath, completed, total) => CheckoutProgress(clonePath, completed, total)
-                        });
-
-                    File.Copy(iniBackup, iniFile, true);
-                }
-            }
-            catch
-            {
-                Task.Run(() =>
-                {
-                    Repository.Clone("https://github.com/snesrev/zelda3.git", repoDir,
-                        new CloneOptions
-                        {
-                            OnCheckoutProgress = (clonePath, completed, total) => CheckoutProgress(clonePath, completed, total)
-                        });
+                        if (File.Exists(iniBackup)) File.Copy(iniBackup, iniFile, true);
+                    }
+                    else
+                    {
+                        if (Directory.Exists(repoDir)) Directory.Delete(repoDir, true);
+                        Repository.Clone(game.RepoUrl, repoDir, new CloneOptions { OnCheckoutProgress = CheckoutProgress });
+                    }
                 });
             }
-
-            while (!Directory.Exists(repoDir))
+            catch (Exception ex)
             {
-                Application.DoEvents();
+                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " repository: " + ex + "\n");
+                MessageBox.Show("Could not download the " + game.Dir + " repository.\n\n" + ex.Message + "\n\nSee " + Program.logFile + ".", "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-
-            do
-            {
-                progBar.Value = progress;
-                progBar.Maximum = max;
-            } while (progress < max);
 
             this.Close();
         }
 
         public void CheckoutProgress(string path, int completed, int total)
         {
-            max = total;
-            progress = completed;
+            if (total <= 0) return;
+            try
+            {
+                BeginInvoke(new MethodInvoker(() =>
+                {
+                    progBar.Style = ProgressBarStyle.Continuous;
+                    progBar.Maximum = total;
+                    progBar.Value = Math.Min(completed, total);
+                }));
+            }
+            catch { }
         }
 
-        private void downloadTCC(object sender, EventArgs e)
+        private async void downloadTCC(object sender, EventArgs e)
         {
             this.Refresh();
-
-            downloadZip("tcc", "TCC.zip", new Uri("https://github.com/FitzRoyX/tinycc/releases/download/tcc_20221020/tcc_20221020.zip"));
-
+            await downloadZip("tcc", "TCC.zip", new Uri(Program.game.TccUrl));
             this.Close();
         }
 
-        private void downloadSDL2(object sender, EventArgs e)
+        private async void downloadSDL2(object sender, EventArgs e)
         {
             this.Refresh();
-
-            downloadZip("SDL2-2.26.3", "SDL2.zip", new Uri("https://github.com/libsdl-org/SDL/releases/download/release-2.26.3/SDL2-devel-2.26.3-VC.zip"));
-
+            await downloadZip("SDL2-" + Program.game.SdlVersion, "SDL2.zip", new Uri(Program.game.SdlUrl));
             this.Close();
         }
 
-        private void downloadPython(object sender, EventArgs e)
+        private async void downloadPython(object sender, EventArgs e)
         {
             this.Refresh();
-
-            downloadZip("assets", "Python.zip", new Uri("https://www.python.org/ftp/python/3.11.1/python-3.11.1-embed-amd64.zip"));
-
+            // Pinned: the embeddable build the asset extraction was tested with.
+            await downloadZip("assets", "Python.zip", new Uri("https://www.python.org/ftp/python/3.11.1/python-3.11.1-embed-amd64.zip"));
             this.Close();
         }
 
-        private void downloadZip(string folder, string filename, Uri uri)
+        static readonly HttpClient http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+
+        // Downloads to a file, reporting progress on the UI thread. Returns false on failure (already reported).
+        private async Task<bool> downloadFile(Uri uri, string destination)
+        {
+            if (!await IsConnectedToInternet())
+            {
+                MessageBox.Show("Unable to reach github.com.\n\nCheck your internet connection and try again.", "No Connection", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            progBar.Style = ProgressBarStyle.Marquee;
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            var tmp = destination + ".part";
+            try
+            {
+                using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+                var total = response.Content.Headers.ContentLength ?? -1;
+                if (total > 0) { progBar.Style = ProgressBarStyle.Continuous; progBar.Maximum = 100; }
+
+                await using var input = await response.Content.ReadAsStreamAsync();
+                await using (var output = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, true))
+                {
+                    var buffer = new byte[1 << 16];
+                    long done = 0; int read;
+                    while ((read = await input.ReadAsync(buffer)) > 0)
+                    {
+                        await output.WriteAsync(buffer.AsMemory(0, read));
+                        done += read;
+                        if (total > 0) progBar.Value = (int)(done * 100 / total);
+                    }
+                }
+                if (File.Exists(destination)) File.Delete(destination);
+                File.Move(tmp, destination);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " download " + uri + ": " + ex + "\n");
+                MessageBox.Show("Download failed: " + uri + "\n\n" + ex.Message, "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        private async Task downloadZip(string folder, string filename, Uri uri)
         {
             var directory = Path.Combine(Program.third_partyDir, folder);
             var zip = Path.Combine(Program.third_partyDir, filename);
@@ -188,207 +280,79 @@ namespace Zelda_3_Launcher
             if (File.Exists(zip)) File.Delete(zip);
             if (Directory.Exists(directory)) Directory.Delete(directory, true);
 
-            if (!IsConnectedToInternet())
-            {
-                MessageBox.Show("Unable to connect to the internet.\n\nPlease ensure you have a stable internet connection before downloading TCC files.",
-                    "No Connection", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                this.Dispose();
-                return;
-            }
-
-            Task.Run(() =>
-            {
-                using (var client = new WebClient())
-                {
-                    if (!Directory.Exists(Program.third_partyDir))
-                    {
-                        Directory.CreateDirectory(Program.third_partyDir);
-                    }
-                    client.DownloadProgressChanged += new DownloadProgressChangedEventHandler(downloadProgress);
-                    client.DownloadFileAsync(uri, zip);
-                }
-            });
-
-            while (!File.Exists(zip))
-            {
-                Application.DoEvents();
-            }
-
-            progBar.Maximum = 100;
-
-            do
-            {
-                progBar.Value = progress;
-            } while (progress < 100);
+            if (!await downloadFile(uri, zip)) return;
 
             this.updateLabel.Text = "Extracting " + filename + " to " + folder + "...";
-
-            Task.Run(() =>
+            progBar.Style = ProgressBarStyle.Marquee;
+            try
             {
-                bool unzipped = false;
-                do
+                await Task.Run(() =>
                 {
-                    try
-                    {
-                        if (filename.Equals("Python.zip")) ZipFile.ExtractToDirectory(zip, Path.Combine(Program.repoDir, "assets"), true);
-                        else ZipFile.ExtractToDirectory(zip, Program.third_partyDir, true);
-                        unzipped = true;
-                    }
-                    catch { }
-                } while (!unzipped);
-            }).Wait();
-
-            File.Delete(zip);
+                    if (filename.Equals("Python.zip")) ZipFile.ExtractToDirectory(zip, Path.Combine(Program.repoDir, "assets"), true);
+                    else ZipFile.ExtractToDirectory(zip, Program.third_partyDir, true);
+                });
+            }
+            catch (Exception ex)
+            {
+                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " extract " + filename + ": " + ex + "\n");
+                MessageBox.Show("Could not extract " + filename + ".\n\n" + ex.Message, "Extract failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                try { File.Delete(zip); } catch { }
+            }
         }
 
-        private void downloadPip(object sender, EventArgs e)
+        private async void downloadPip(object sender, EventArgs e)
         {
             this.Refresh();
-
-            var filename = "get-pip.py";
-            Uri uri = new Uri("https://bootstrap.pypa.io/get-pip.py");
-
-            var directory = Path.Combine(Program.repoDir, "assets");
-            var destination = Path.Combine(Program.repoDir, "assets", filename);
-
-            if (File.Exists(destination)) File.Delete(destination);
-
-            if (!IsConnectedToInternet())
-            {
-                MessageBox.Show("Unable to connect to the internet.\n\nPlease ensure you have a stable internet connection before downloading TCC files.",
-                    "No Connection", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                this.Dispose();
-                return;
-            }
-
-            Task.Run(() =>
-            {
-                using (var client = new WebClient())
-                {
-                    if (!Directory.Exists(directory))
-                    {
-                        Directory.CreateDirectory(directory);
-                    }
-                    client.DownloadProgressChanged += new DownloadProgressChangedEventHandler(downloadProgress);
-                    client.DownloadFileAsync(uri, destination);
-                }
-            });
-
-            while (!File.Exists(destination))
-            {
-                Application.DoEvents();
-            }
-
-            progBar.Maximum = 100;
-
-            do
-            {
-                progBar.Value = progress;
-            } while (progress < 100);
-
+            var destination = Path.Combine(Program.repoDir, "assets", "get-pip.py");
+            await downloadFile(new Uri("https://bootstrap.pypa.io/get-pip.py"), destination);
             this.Close();
         }
 
-        private void downloadProgress(object sender, DownloadProgressChangedEventArgs e)
+        // One quick HTTPS request to the host the downloads come from. Pings are dropped by many
+        // networks and VPNs, which made the old check report "offline" after a 30 second freeze.
+        public static async Task<bool> IsConnectedToInternet()
         {
-            progress = e.ProgressPercentage;
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var request = new HttpRequestMessage(HttpMethod.Head, "https://github.com/");
+                using var response = await http.SendAsync(request, cts.Token);
+                return true;
+            }
+            catch { return false; }
         }
 
-        public static bool IsConnectedToInternet()
+        // Zelda 3's language ROMs (settings > Language). The main ROM check uses Game.Sha1.
+        static readonly Dictionary<string, string[]> ZeldaLanguageHashes = new()
         {
-            Ping p = new Ping();
-            try
-            {
-                PingReply reply = p.Send("github.com", 10000);
-                if (reply.Status == IPStatus.Success)
-                    return true;
-            }
-            catch { }
-            try
-            {
-                PingReply reply = p.Send("python.org", 10000);
-                if (reply.Status == IPStatus.Success)
-                    return true;
-            }
-            catch { }
-            try
-            {
-                PingReply reply = p.Send("google.com", 10000);
-                if (reply.Status == IPStatus.Success)
-                    return true;
-            }
-            catch { }
+            ["us"] = new[] { "6D4F10A8B10E10DBE624CB23CF03B88BB8252973" },
+            ["de"] = new[] { "2E62494967FB0AFDF5DA1635607F9641DF7C6559" },
+            ["fr"] = new[] { "229364A1B92A05167CD38609B1AA98F7041987CC" },
+            ["fr-c"] = new[] { "C1C6C7F76FFF936C534FF11F87A54162FC0AA100" },
+            ["en"] = new[] { "7C073A222569B9B8E8CA5FCB5DFEC3B5E31DA895" },
+            ["es"] = new[] { "461FCBD700D1332009C0E85A7A136E2A8E4B111E" },
+            ["pl"] = new[] { "3C4D605EEFDA1D76F101965138F238476655B11D" },
+            ["pt"] = new[] { "D0D09ED41F9C373FE6AFDCCAFBF0DA8C88D3D90D" },
+            ["redux"] = new[] { "B2A07A59E64C498BC1B2F28728F9BF4014C8D582", "9325C22EB0A2A1F0017157C8B620BC3A605CEDE1" },
+            ["nl"] = new[] { "FA8ADFDBA2697C9A54D583A1284A22AC764C7637" },
+            ["sv"] = new[] { "43CD3438469B2C3FE879EA2F410B3EF3CB3F1CA4" },
+        };
 
-            return false;
+        public (Boolean success, string hash, string yourHash) checkHash(string file, string version)
+        {
+            var yourHash = Sha1Of(RomBytes(file));
+            if (!ZeldaLanguageHashes.TryGetValue(version, out var hashes)) return (false, "NULL", yourHash);
+            return (hashes.Contains(yourHash), string.Join(" or ", hashes), yourHash);
         }
 
-        public (Boolean success, string hash, string yourHash) checkHash(string file, string version="us")
+        public (Boolean success, string hash, string yourHash) checkHash(string file)
         {
-            using (SHA1Managed sha1Hasher = new SHA1Managed())
-            using (FileStream stream = new FileStream(file, FileMode.Open))
-            using (BufferedStream buffer = new BufferedStream(stream))
-            {
-                byte[] hash = sha1Hasher.ComputeHash(buffer);
-                StringBuilder hashString = new StringBuilder(2 * hash.Length);
-                foreach (byte b in hash)
-                {
-                    hashString.AppendFormat("{0:x2}", b);
-                }
-
-                string versionHash;
-                var yourHash = hashString.ToString().ToUpper();
-
-                switch (version)
-                {
-                    case "us":
-                        versionHash = "6D4F10A8B10E10DBE624CB23CF03B88BB8252973";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "de":
-                        versionHash = "2E62494967FB0AFDF5DA1635607F9641DF7C6559";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "fr":
-                        versionHash = "229364A1B92A05167CD38609B1AA98F7041987CC";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "fr-c":
-                        versionHash = "C1C6C7F76FFF936C534FF11F87A54162FC0AA100";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "en":
-                        versionHash = "7C073A222569B9B8E8CA5FCB5DFEC3B5E31DA895";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "es":
-                        versionHash = "461FCBD700D1332009C0E85A7A136E2A8E4B111E";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "pl":
-                        versionHash = "3C4D605EEFDA1D76F101965138F238476655B11D";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "pt":
-                        versionHash = "D0D09ED41F9C373FE6AFDCCAFBF0DA8C88D3D90D";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "redux":
-                        versionHash = "B2A07A59E64C498BC1B2F28728F9BF4014C8D582";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        versionHash = "9325C22EB0A2A1F0017157C8B620BC3A605CEDE1";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "nl":
-                        versionHash = "FA8ADFDBA2697C9A54D583A1284A22AC764C7637";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                    case "sv":
-                        versionHash = "43CD3438469B2C3FE879EA2F410B3EF3CB3F1CA4";
-                        if (yourHash == versionHash) return (true, versionHash, yourHash);
-                        return (false, versionHash, yourHash);
-                }
-            }
-            return (false, "NULL", "NULL");
+            var game = Program.game;
+            var yourHash = Sha1Of(RomBytes(file));
+            return (game.Sha1.Contains(yourHash), string.Join(" or ", game.Sha1), yourHash);
         }
 
         private ProgressBar progBar;
