@@ -27,7 +27,7 @@ namespace Zelda_3_Launcher
 
             this.launch.Text = "Running...";
             this.WindowState = FormWindowState.Minimized;
-            if (runProcess("cmd.exe", "/C " + Program.game.Exe + (Program.game.LaunchArgs.Length > 0 ? " " + Program.game.LaunchArgs : "")))
+            if (runProcess("cmd.exe", "/C .\\" + Program.game.Exe + (Program.game.LaunchArgs.Length > 0 ? " " + Program.game.LaunchArgs : "")))
             {
                 MessageBox.Show("Error occurred while launching " + Program.game.Name + ".\n\nPlease refer to " + Program.logFile + " for further details.");
             }
@@ -94,7 +94,7 @@ namespace Zelda_3_Launcher
                 // The kit carries its own python\ with the packages the step needs already installed.
                 progressCompile.Value++;
                 labelCompileStatus.Text = "Extracting assets from the ROM...";
-                File.AppendAllText(Program.logFile, "Extracting assets...");
+                Program.Log("Extracting assets...");
                 if (runProcess("cmd.exe", "/C " + game.AssetCommand))
                 {
                     MessageBox.Show("Error occurred while extracting resources.\n\nPlease refer to " + Program.logFile + " for further details.");
@@ -103,11 +103,13 @@ namespace Zelda_3_Launcher
             }
 
             // The kit's build.cmd: the port's own compile line, with the TCC and SDL2 the kit carries.
+            // Explicit .\ because Windows with NoDefaultCurrentDirectoryInExePath set (the owner's PC) makes
+            // cmd refuse a bare "build.cmd"; CI runners do not set it, which is why CI never saw it.
             // Same bytes CI compiled when it verified the kit.
             this.build.Text = "Building...";
             progressCompile.Value++;
             labelCompileStatus.Text = "Building " + game.Exe + "...";
-            if (runProcess("cmd.exe", "/C build.cmd"))
+            if (runProcess("cmd.exe", @"/C .\build.cmd"))
             {
                 MessageBox.Show("Error occurred while building " + game.Exe + ".\n\nPlease refer to " + Program.logFile + " for further details.");
                 return;
@@ -161,7 +163,7 @@ namespace Zelda_3_Launcher
             progressCompile.Visible = false;
             labelCompileStatus.Visible = false;
 
-            File.AppendAllText(Program.logFile, "\n\n\n\n");
+            Program.Log("\n\n\n\n");
             UpdateMainForm();
         }
 
@@ -380,9 +382,9 @@ namespace Zelda_3_Launcher
                 waitHandle.Set();
             }
 
-            File.AppendAllText(logFile, "\n" + DateTime.Now.ToString() + "\n----------------------------\n");
+            Program.Log("\n" + DateTime.Now.ToString() + "\n----------------------------\n");
 
-            File.AppendAllText(logFile, "Executing via " + filename + ":\n " + arguments + "\n");
+            Program.Log("Executing via " + filename + ":\n " + arguments + "\n");
 
             ProcessStartInfo sInfo = new ProcessStartInfo();
             sInfo.FileName = filename;
@@ -406,7 +408,7 @@ namespace Zelda_3_Launcher
             {
                 this.BeginInvoke(new MethodInvoker(() =>
                 {
-                    File.AppendAllText(logFile, e.Data + "\n");
+                    Program.Log(e.Data + "\n");
                 }));
             });
 
@@ -414,7 +416,7 @@ namespace Zelda_3_Launcher
             {
                 this.BeginInvoke(new MethodInvoker(() =>
                 {
-                    File.AppendAllText(logFile, e.Data + "\n");
+                    Program.Log(e.Data + "\n");
                 }));
             });
 
@@ -437,7 +439,7 @@ namespace Zelda_3_Launcher
 
             process.Close();
 
-            File.AppendAllText(logFile, "\n");
+            Program.Log("\n");
 
             if (File.Exists(logFile))
             {

@@ -228,7 +228,7 @@ namespace Zelda_3_Launcher
             }
             catch (Exception ex)
             {
-                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " package: " + ex + "\n");
+                Program.Log("\n" + DateTime.Now + " package: " + ex + "\n");
                 MessageBox.Show("Could not unpack " + game.Dir + ".\n\n" + ex.Message + "\n\nSee " + Program.logFile + ".", "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -279,7 +279,7 @@ namespace Zelda_3_Launcher
             catch (Exception ex)
             {
                 try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " download " + uri + ": " + ex + "\n");
+                Program.Log("\n" + DateTime.Now + " download " + uri + ": " + ex + "\n");
                 MessageBox.Show("Download failed: " + uri + "\n\n" + ex.Message, "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
