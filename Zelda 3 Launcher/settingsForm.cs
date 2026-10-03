@@ -38,6 +38,7 @@ namespace Zelda_3_Launcher
 
             if (checkBoxEnableMSU.Checked == false) groupBoxMSUSettings.Enabled = false;
             if (checkBoxEnableAudio.Checked == false) groupBoxSound.Enabled = false;
+            ApplyGameShape();
         }
 
         private void comboBoxLanguage_Select(object sender, EventArgs e)
@@ -90,15 +91,15 @@ namespace Zelda_3_Launcher
                     else exit = true;
                 }
 
-                if (runProcess("cmd.exe", "/C cd .\\assets && python restool.py --extract-dialogue -r " + language.full.ToLower() + ".sfc"))
+                if (runProcess("cmd.exe", "/C cd .\\assets && ..\\python\\python.exe restool.py --extract-dialogue -r " + language.full.ToLower() + ".sfc"))
                 {
-                    MessageBox.Show("Error occurred while extracting dialog.\n\nPlease refer to " + Path.Combine(Program.currentDirectory, "zelda3.log") + " for further details.");
+                    MessageBox.Show("Error occurred while extracting dialog.\n\nPlease refer to " + Program.logFile + " for further details.");
                     return;
                 }
 
-                if (runProcess("cmd.exe", @"/C cd .\assets && python restool.py --languages=" + language.abbreviated))
+                if (runProcess("cmd.exe", @"/C cd .\assets && ..\python\python.exe restool.py --languages=" + language.abbreviated))
                 {
-                    MessageBox.Show("Error occurred while generating language files.\n\nPlease refer to " + Path.Combine(Program.currentDirectory, "zelda3.log") + " for further details.");
+                    MessageBox.Show("Error occurred while generating language files.\n\nPlease refer to " + Program.logFile + " for further details.");
                     return;
                 }
             }
@@ -173,7 +174,7 @@ namespace Zelda_3_Launcher
             }
             catch
             {
-                answer = MessageBox.Show("INI backup file is corrupted and preventing the settings menu from loading.\n\nDo you want to download a clean copy from the zelda3 repository?", "Corrupted Settings", MessageBoxButtons.YesNo);
+                answer = MessageBox.Show("INI backup file is corrupted and preventing the settings menu from loading.\n\nDo you want to download a clean copy from the " + Program.game.Dir + " repository?", "Corrupted Settings", MessageBoxButtons.YesNo);
 
                 if (answer == DialogResult.No)
                 {
@@ -181,7 +182,7 @@ namespace Zelda_3_Launcher
                     return;
                 }
 
-                File.Delete(Path.Combine(Program.repoDir, "saves", "zelda3.ini"));
+                File.Delete(Path.Combine(Program.repoDir, "saves", Program.game.Ini));
 
                 restoreINI();
                 ImportINI();
@@ -196,8 +197,8 @@ namespace Zelda_3_Launcher
 
         private void restoreINI()
         {
-            var iniFile = Path.Combine(Program.repoDir, "zelda3.ini");
-            var iniBackup = Path.Combine(Program.repoDir, "saves", "zelda3.ini");
+            var iniFile = Path.Combine(Program.repoDir, Program.game.Ini);
+            var iniBackup = Path.Combine(Program.repoDir, "saves", Program.game.Ini);
 
             File.Delete(iniFile);
 
@@ -229,8 +230,8 @@ namespace Zelda_3_Launcher
 
         internal static void DownloadFreshINI()
         {
-            var filename = "zelda3.ini";
-            Uri uri = new Uri("https://raw.githubusercontent.com/snesrev/zelda3/master/zelda3.ini");
+            var filename = Program.game.Ini;
+            Uri uri = new Uri(Program.game.FreshIniUrl);
             var destination = Path.Combine(Program.repoDir, "saves", filename);
             Directory.CreateDirectory(Path.Combine(Program.repoDir, "saves"));
 
@@ -327,12 +328,12 @@ namespace Zelda_3_Launcher
 
         private void ImportINI()
         {
-            var iniFile = Path.Combine(Program.repoDir, "zelda3.ini");
+            var iniFile = Path.Combine(Program.repoDir, Program.game.Ini);
 
             // Check for INI and if missing restore from initial install backup
             if (!File.Exists(iniFile))
             {
-                var iniBackup = Path.Combine(Program.repoDir, "saves", "zelda3.ini");
+                var iniBackup = Path.Combine(Program.repoDir, "saves", Program.game.Ini);
 
                 if (!File.Exists(iniBackup)) DownloadFreshINI();
 
@@ -360,6 +361,7 @@ namespace Zelda_3_Launcher
                 }
             }
             var iniText = File.ReadAllText(iniFile);
+            rawIni = iniText;
 
             // INI parsing
             var config = new IniParserConfiguration();
@@ -368,17 +370,18 @@ namespace Zelda_3_Launcher
             var parser = new IniDataParser(config);
 
             var settings = parser.Parse(iniText);
+            string G(string sec, string key, string def) => IniShape.Get(settings, sec, key, def)!;
 
             // General Settings
 
-            autosaveCheck.Checked = settings["General"]["Autosave"].ToBool();
-            performance.Checked = settings["General"]["DisplayPerfInTitle"].ToBool();
-            disableFrameDelay.Checked = settings["General"]["DisableFrameDelay"].ToBool();
+            autosaveCheck.Checked = G("General", "Autosave", "0").ToBool();
+            performance.Checked = G("General", "DisplayPerfInTitle", "0").ToBool();
+            disableFrameDelay.Checked = G("General", "DisableFrameDelay", "0").ToBool();
 
             unchangedSprites.Checked = false;
             noVisualFixes.Checked = false;
             checkBoxExtend.Checked = false;
-            var ratioSettings = settings["General"]["ExtendedAspectRatio"].Split(',');
+            var ratioSettings = G("General", "ExtendedAspectRatio", "4:3").Split(',');
             foreach (var item in ratioSettings)
             {
                 switch (item.Trim())
@@ -398,7 +401,7 @@ namespace Zelda_3_Launcher
                 }
             }
 
-            switch (settings["General"]["Language"])
+            switch (G("General", "Language", "us"))
             {
                 case "nl":
                     comboBoxLanguage.SelectedIndex = 0;
@@ -437,9 +440,9 @@ namespace Zelda_3_Launcher
 
             // Graphics Settings
 
-            if (!settings["Graphics"]["WindowSize"].Equals("Auto"))
+            if (!G("Graphics", "WindowSize", "Auto").Equals("Auto"))
             {
-                var resolution = settings["Graphics"]["WindowSize"].Split("x");
+                var resolution = G("Graphics", "WindowSize", "Auto").Split("x");
 
                 customSize.Checked = true;
                 width.Text = resolution[0];
@@ -452,7 +455,7 @@ namespace Zelda_3_Launcher
                 height.Text = "";
             }
 
-            switch (settings["Graphics"]["Fullscreen"])
+            switch (G("Graphics", "Fullscreen", "0"))
             {
                 case "0":
                     radioWindowed.Checked = true;
@@ -465,15 +468,15 @@ namespace Zelda_3_Launcher
                     break;
             }
 
-            numericWindowScale.Value = Decimal.Parse(settings["Graphics"]["WindowScale"]);
-            checkPPU.Checked = settings["Graphics"]["NewRenderer"].ToBool();
-            checkMode7.Checked = settings["Graphics"]["EnhancedMode7"].ToBool();
-            checkStretch.Checked = settings["Graphics"]["IgnoreAspectRatio"].ToBool();
-            checkSpriteLimit.Checked = settings["Graphics"]["NoSpriteLimits"].ToBool();
-            checkLinearFiltering.Checked = settings["Graphics"]["LinearFiltering"].ToBool();
-            checkBoxDimFlashing.Checked = settings["Graphics"]["DimFlashes"].ToBool();
+            numericWindowScale.Value = Decimal.Parse(G("Graphics", "WindowScale", "3"));
+            checkPPU.Checked = G("Graphics", "NewRenderer", "0").ToBool();
+            checkMode7.Checked = G("Graphics", "EnhancedMode7", "0").ToBool();
+            checkStretch.Checked = G("Graphics", "IgnoreAspectRatio", "0").ToBool();
+            checkSpriteLimit.Checked = G("Graphics", "NoSpriteLimits", "0").ToBool();
+            checkLinearFiltering.Checked = G("Graphics", "LinearFiltering", "0").ToBool();
+            checkBoxDimFlashing.Checked = G("Graphics", "DimFlashes", "0").ToBool();
 
-            switch (settings["Graphics"]["OutputMethod"])
+            switch (G("Graphics", "OutputMethod", "SDL"))
             {
                 case "SDL":
                     comboRenderMethod.SelectedIndex = 0;
@@ -486,11 +489,11 @@ namespace Zelda_3_Launcher
                     break;
             }
 
-            if (settings["Graphics"]["LinkGraphics"] != null)
+            if (IniShape.Get(settings, "Graphics", "LinkGraphics", null) != null)
             {
                 checkBoxCustomLinkSprites.Checked = true;
                 textBoxCustomLink.Enabled = true;
-                textBoxCustomLink.Text = settings["Graphics"]["LinkGraphics"];
+                textBoxCustomLink.Text = IniShape.Get(settings, "Graphics", "LinkGraphics", null);
                 buttonOpenSprites.Enabled = true;
             }
             else
@@ -500,7 +503,7 @@ namespace Zelda_3_Launcher
                 buttonOpenSprites.Enabled = false;
             }
 
-            if (settings["Graphics"]["Shader"].Equals(""))
+            if (G("Graphics", "Shader", "").Equals(""))
             {
                 checkBoxShader.Checked = false;
                 textBoxGLSLShader.Enabled = false;
@@ -511,20 +514,20 @@ namespace Zelda_3_Launcher
             {
                 checkBoxShader.Checked = true;
                 textBoxGLSLShader.Enabled = true;
-                textBoxGLSLShader.Text = settings["Graphics"]["Shader"];
+                textBoxGLSLShader.Text = G("Graphics", "Shader", "");
                 buttonOpenShader.Enabled = true;
             }
 
             // Sound Settings
 
-            checkBoxEnableAudio.Checked = settings["Sound"]["EnableAudio"].ToBool();
-            checkBoxResumeMSU.Checked = settings["Sound"]["ResumeMSU"].ToBool();
-            textBoxMSUDirectory.Text = settings["Sound"]["MSUPath"];
+            checkBoxEnableAudio.Checked = G("Sound", "EnableAudio", "1").ToBool();
+            checkBoxResumeMSU.Checked = G("Sound", "ResumeMSU", "0").ToBool();
+            textBoxMSUDirectory.Text = G("Sound", "MSUPath", "");
 
-            if (settings["Sound"]["AudioChannels"].Equals("1")) radioButtonMono.Checked = true;
+            if (G("Sound", "AudioChannels", "2").Equals("1")) radioButtonMono.Checked = true;
             else radioButtonStereo.Checked = true;
 
-            switch (settings["Sound"]["AudioFreq"])
+            switch (G("Sound", "AudioFreq", ""))
             {
                 case "48000":
                     comboBoxFrequency.SelectedIndex = 0;
@@ -543,7 +546,7 @@ namespace Zelda_3_Launcher
                     break;
             }
 
-            switch (settings["Sound"]["AudioSamples"])
+            switch (G("Sound", "AudioSamples", ""))
             {
                 case "512":
                     comboBoxSamples.SelectedIndex = 0;
@@ -558,22 +561,22 @@ namespace Zelda_3_Launcher
                     comboBoxSamples.SelectedIndex = 3;
                     break;
                 default:
-                    comboBoxSamples.Text = settings["Sound"]["AudioSamples"];
+                    comboBoxSamples.Text = G("Sound", "AudioSamples", "");
                     break;
             }
 
-            var msuVolume = Decimal.Parse(settings["Sound"]["MSUVolume"].Replace("%", ""));
+            var msuVolume = Decimal.Parse(G("Sound", "MSUVolume", "100%").Replace("%", ""));
             if (msuVolume.IsBetween(0, 100)) numericMSUVolume.Value = msuVolume;
             else numericMSUVolume.Value = 100;
 
-            if (settings["Sound"]["EnableMSU"].Equals("false"))
+            if (G("Sound", "EnableMSU", "false").Equals("false"))
             {
                 checkBoxEnableMSU.Checked = false;
             }
             else
             {
                 checkBoxEnableMSU.Checked = true;
-                switch (settings["Sound"]["EnableMSU"])
+                switch (G("Sound", "EnableMSU", "false"))
                 {
                     case "deluxe":
                         comboBoxMSU.SelectedIndex = 1;
@@ -592,7 +595,7 @@ namespace Zelda_3_Launcher
 
             // Gameplay Settings
 
-            if (settings["Features"]["ItemSwitchLR"].ToBool())
+            if (G("Features", "ItemSwitchLR", "0").ToBool())
             {
                 checkBoxQuickSwitch.Checked = true;
                 checkBoxLRLimit.Enabled = true;
@@ -603,25 +606,44 @@ namespace Zelda_3_Launcher
                 checkBoxLRLimit.Enabled = false;
             }
 
-            checkBoxLRLimit.Checked = settings["Features"]["ItemSwitchLRLimit"].ToBool();
-            checkBoxDashTurning.Checked = settings["Features"]["TurnWhileDashing"].ToBool();
-            checkBoxMirrorDark.Checked = settings["Features"]["MirrorToDarkworld"].ToBool();
-            checkBoxSwordItems.Checked = settings["Features"]["CollectItemsWithSword"].ToBool();
-            checkBoxSwordPots.Checked = settings["Features"]["BreakPotsWithSword"].ToBool();
-            checkBoxHeartBeep.Checked = settings["Features"]["DisableLowHealthBeep"].ToBool();
-            checkBoxIntroSkip.Checked = settings["Features"]["SkipIntroOnKeypress"].ToBool();
-            checkBoxMaxResources.Checked = settings["Features"]["ShowMaxItemsInYellow"].ToBool();
-            checkBoxMoreBombs.Checked = settings["Features"]["MoreActiveBombs"].ToBool();
-            checkBoxLargerWallet.Checked = settings["Features"]["CarryMoreRupees"].ToBool();
-            checkBoxMiscFixes.Checked = settings["Features"]["MiscBugFixes"].ToBool();
-            checkBoxMajorFixes.Checked = settings["Features"]["GameChangingBugFixes"].ToBool();
-            checkBoxCancelBird.Checked = settings["Features"]["CancelBirdTravel"].ToBool();
+            checkBoxLRLimit.Checked = G("Features", "ItemSwitchLRLimit", "0").ToBool();
+            checkBoxDashTurning.Checked = G("Features", "TurnWhileDashing", "0").ToBool();
+            checkBoxMirrorDark.Checked = G("Features", "MirrorToDarkworld", "0").ToBool();
+            checkBoxSwordItems.Checked = G("Features", "CollectItemsWithSword", "0").ToBool();
+            checkBoxSwordPots.Checked = G("Features", "BreakPotsWithSword", "0").ToBool();
+            checkBoxHeartBeep.Checked = G("Features", "DisableLowHealthBeep", "0").ToBool();
+            checkBoxIntroSkip.Checked = G("Features", "SkipIntroOnKeypress", "0").ToBool();
+            checkBoxMaxResources.Checked = G("Features", "ShowMaxItemsInYellow", "0").ToBool();
+            checkBoxMoreBombs.Checked = G("Features", "MoreActiveBombs", "0").ToBool();
+            checkBoxLargerWallet.Checked = G("Features", "CarryMoreRupees", "0").ToBool();
+            checkBoxMiscFixes.Checked = G("Features", "MiscBugFixes", "0").ToBool();
+            checkBoxMajorFixes.Checked = G("Features", "GameChangingBugFixes", "0").ToBool();
+            checkBoxCancelBird.Checked = G("Features", "CancelBirdTravel", "0").ToBool();
+        }
+
+        // What this game's ini actually has decides what the window shows.
+        private string rawIni = "";
+        private void ApplyGameShape()
+        {
+            bool Has(string key) => IniShape.HasKey(rawIni, key);
+            this.Text = Program.game.Name + " settings";
+            IniShape.ShowIf(Has("Language"), comboBoxLanguage, labelLanguage);
+            IniShape.ShowIf(Has("ExtendedAspectRatio"), aspectRatio, unchangedSprites, noVisualFixes, checkBoxExtend);
+            IniShape.ShowIf(Has("DisplayPerfInTitle"), performance);
+            IniShape.ShowIf(Has("EnhancedMode7"), checkMode7);
+            IniShape.ShowIf(Has("LinearFiltering"), checkLinearFiltering);
+            IniShape.ShowIf(Has("DimFlashes"), checkBoxDimFlashing);
+            IniShape.ShowIf(Has("OutputMethod"), comboRenderMethod, labelRenderMethod);
+            IniShape.ShowIf(Has("Shader"), checkBoxShader, textBoxGLSLShader, buttonOpenShader);
+            IniShape.ShowIf(Has("LinkGraphics"), checkBoxCustomLinkSprites, textBoxCustomLink, buttonOpenSprites);
+            IniShape.ShowIf(Has("EnableMSU"), checkBoxEnableMSU, groupBoxMSUSettings);
+            IniShape.ShowIf(Has("ItemSwitchLR"), groupBoxGameplay);
         }
 
         private void SaveToINI()
         {
-            // Build INI data structure from existing zelda3.ini file
-            var iniFile = Path.Combine(Program.repoDir, "zelda3.ini");
+            // Build INI data structure from the game's existing ini file
+            var iniFile = Path.Combine(Program.repoDir, Program.game.Ini);
             var iniText = File.ReadAllText(iniFile);
 
             var config = new IniParserConfiguration();
@@ -885,7 +907,9 @@ namespace Zelda_3_Launcher
             settings["Features"]["GameChangingBugFixes"] = Convert.ToInt32(checkBoxMajorFixes.Checked).ToString();
             settings["Features"]["CancelBirdTravel"] = Convert.ToInt32(checkBoxCancelBird.Checked).ToString();
 
-            // Save settings to zelda3.ini
+            // Only the keys this game's ini knows go back to disk.
+            IniShape.Prune(settings, iniText);
+
             var filer = new FileIniDataParser();
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             filer.WriteFile(iniFile, settings, Encoding.GetEncoding(1252));
@@ -1029,7 +1053,7 @@ namespace Zelda_3_Launcher
 
         public Boolean runProcess(string filename, string arguments)
         {
-            var logFile = Program.currentDirectory + "\\zelda3.log";
+            var logFile = Program.logFile;
             var fileInfo = new FileInfo(logFile);
 
             if (File.Exists(logFile) && fileInfo.Length > (51200))
