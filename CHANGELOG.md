@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0](https://github.com/yabo-san/snesrev-launcher/compare/v1.6.3...v1.7.0) (2026-10-03)
+
+
+### Features
+
+* settings and keymapper for all three games ([3699602](https://github.com/yabo-san/snesrev-launcher/commit/3699602d602ad1a8d28630774f08f57aa5e5872f))
+* the settings and keymapper windows work for every game ([7136fd4](https://github.com/yabo-san/snesrev-launcher/commit/7136fd4643b6c03bb71dee3c1905c5d6dc8feca7))
+
 ## [1.6.3](https://github.com/yabo-san/snesrev-launcher/compare/v1.6.2...v1.6.3) (2026-10-03)
 
 
