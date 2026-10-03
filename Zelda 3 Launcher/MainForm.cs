@@ -109,7 +109,7 @@ namespace Zelda_3_Launcher
             this.build.Text = "Building...";
             progressCompile.Value++;
             labelCompileStatus.Text = "Building " + game.Exe + "...";
-            if (runProcess("cmd.exe", "/C .\build.cmd"))
+            if (runProcess("cmd.exe", @"/C .\build.cmd"))
             {
                 MessageBox.Show("Error occurred while building " + game.Exe + ".\n\nPlease refer to " + Program.logFile + " for further details.");
                 return;
