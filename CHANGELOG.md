@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.1](https://github.com/yabo-san/snesrev-launcher/compare/v1.6.0...v1.6.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **build:** drop the LibGit2Sharp reference the 1.6.0 release commit re-added ([140eb76](https://github.com/yabo-san/snesrev-launcher/commit/140eb76606580f116a54b95a933eda7c326a91a7))
+* **build:** drop the LibGit2Sharp reference the 1.6.0 release commit re-added; restore --locked-mode failed and v1.6.0 shipped without the launcher exe ([b39d5a9](https://github.com/yabo-san/snesrev-launcher/commit/b39d5a91d329265c30570d8be8fb20cd1b7ee857))
+
 ## [1.6.0](https://github.com/yabo-san/snesrev-launcher/compare/v1.5.1...v1.6.0) (2026-10-02)
 
 
