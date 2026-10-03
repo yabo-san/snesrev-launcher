@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.2](https://github.com/yabo-san/snesrev-launcher/compare/v1.6.1...v1.6.2) (2026-10-03)
+
+
+### Bug Fixes
+
+* **kit:** add ../assets to the embedded Python's ._pth; isolated mode dropped the script dir so restool's import util failed (v1.6.1 on a real PC) ([2c4ecce](https://github.com/yabo-san/snesrev-launcher/commit/2c4ecceb5b7d49264f6aade8cffe708fe6d8aff9))
+* **kit:** embedded Python could not import the asset scripts ([3fc051e](https://github.com/yabo-san/snesrev-launcher/commit/3fc051eb6b3921da2f5a8c199668d3d1f664bb4c))
+
 ## [1.6.1](https://github.com/yabo-san/snesrev-launcher/compare/v1.6.0...v1.6.1) (2026-10-02)
 
 
