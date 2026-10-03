@@ -94,7 +94,7 @@ namespace Zelda_3_Launcher
                 // The kit carries its own python\ with the packages the step needs already installed.
                 progressCompile.Value++;
                 labelCompileStatus.Text = "Extracting assets from the ROM...";
-                File.AppendAllText(Program.logFile, "Extracting assets...");
+                Program.Log("Extracting assets...");
                 if (runProcess("cmd.exe", "/C " + game.AssetCommand))
                 {
                     MessageBox.Show("Error occurred while extracting resources.\n\nPlease refer to " + Program.logFile + " for further details.");
@@ -161,7 +161,7 @@ namespace Zelda_3_Launcher
             progressCompile.Visible = false;
             labelCompileStatus.Visible = false;
 
-            File.AppendAllText(Program.logFile, "\n\n\n\n");
+            Program.Log("\n\n\n\n");
             UpdateMainForm();
         }
 
@@ -380,9 +380,9 @@ namespace Zelda_3_Launcher
                 waitHandle.Set();
             }
 
-            File.AppendAllText(logFile, "\n" + DateTime.Now.ToString() + "\n----------------------------\n");
+            Program.Log("\n" + DateTime.Now.ToString() + "\n----------------------------\n");
 
-            File.AppendAllText(logFile, "Executing via " + filename + ":\n " + arguments + "\n");
+            Program.Log("Executing via " + filename + ":\n " + arguments + "\n");
 
             ProcessStartInfo sInfo = new ProcessStartInfo();
             sInfo.FileName = filename;
@@ -406,7 +406,7 @@ namespace Zelda_3_Launcher
             {
                 this.BeginInvoke(new MethodInvoker(() =>
                 {
-                    File.AppendAllText(logFile, e.Data + "\n");
+                    Program.Log(e.Data + "\n");
                 }));
             });
 
@@ -414,7 +414,7 @@ namespace Zelda_3_Launcher
             {
                 this.BeginInvoke(new MethodInvoker(() =>
                 {
-                    File.AppendAllText(logFile, e.Data + "\n");
+                    Program.Log(e.Data + "\n");
                 }));
             });
 
@@ -437,7 +437,7 @@ namespace Zelda_3_Launcher
 
             process.Close();
 
-            File.AppendAllText(logFile, "\n");
+            Program.Log("\n");
 
             if (File.Exists(logFile))
             {

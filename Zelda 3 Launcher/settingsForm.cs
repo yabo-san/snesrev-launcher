@@ -242,7 +242,7 @@ namespace Zelda_3_Launcher
             }
             catch (Exception ex)
             {
-                File.AppendAllText(Program.logFile, "\n" + DateTime.Now + " fresh ini: " + ex + "\n");
+                Program.Log("\n" + DateTime.Now + " fresh ini: " + ex + "\n");
                 MessageBox.Show("Your INI backup file is missing and a fresh copy could not be downloaded.\n\n" + ex.Message,
                     "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -1038,9 +1038,9 @@ namespace Zelda_3_Launcher
                 File.WriteAllLines(logFile, lines);
             }
 
-            File.AppendAllText(logFile, "\n" + DateTime.Now.ToString() + "\n----------------------------\n");
+            Program.Log("\n" + DateTime.Now.ToString() + "\n----------------------------\n");
 
-            File.AppendAllText(logFile, "Executing via " + filename + ":\n " + arguments + "\n");
+            Program.Log("Executing via " + filename + ":\n " + arguments + "\n");
 
             ProcessStartInfo sInfo = new ProcessStartInfo();
             sInfo.FileName = filename;
@@ -1064,7 +1064,7 @@ namespace Zelda_3_Launcher
             {
                 this.BeginInvoke(new MethodInvoker(() =>
                 {
-                    File.AppendAllText(logFile, e.Data + "\n");
+                    Program.Log(e.Data + "\n");
                 }));
             });
 
@@ -1072,7 +1072,7 @@ namespace Zelda_3_Launcher
             {
                 this.BeginInvoke(new MethodInvoker(() =>
                 {
-                    File.AppendAllText(logFile, e.Data + "\n");
+                    Program.Log(e.Data + "\n");
                 }));
             });
 
@@ -1094,7 +1094,7 @@ namespace Zelda_3_Launcher
 
             process.Close();
 
-            File.AppendAllText(logFile, "\n");
+            Program.Log("\n");
 
             return false;
         }
