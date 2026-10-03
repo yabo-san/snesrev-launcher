@@ -1,4 +1,4 @@
-﻿using IniParser;
+using IniParser;
 using IniParser.Model;
 using IniParser.Model.Configuration;
 using IniParser.Parser;
@@ -16,7 +16,7 @@ namespace Zelda_3_Launcher
         bool changed = false;
         bool saving = false;
         IniData settings = new IniData();
-        string iniFile = Path.Combine(Program.repoDir, "zelda3.ini");
+        string iniFile = Path.Combine(Program.repoDir, Program.game.Ini);
         MyController controller = new MyController();
 
         public keymapper()
@@ -164,37 +164,37 @@ namespace Zelda_3_Launcher
 
             if (result.Contains("Shift"))
             {
-                MessageBox.Show("The Shift keys are not recognized by zelda3.exe and thus cannot be used.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("The Shift keys are not recognized by " + Program.game.Exe + " and thus cannot be used.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
 
             if (result.Contains("Ctrl"))
             {
-                MessageBox.Show("The Control keys are not recognized by zelda3.exe and thus cannot be used.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("The Control keys are not recognized by " + Program.game.Exe + " and thus cannot be used.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
 
             if (result.Contains("Alt"))
             {
-                MessageBox.Show("The Alt keys are not recognized by zelda3.exe and thus cannot be used.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("The Alt keys are not recognized by " + Program.game.Exe + " and thus cannot be used.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
 
             if (result.Contains("F") && result.Length == 2 | result.Length == 3)
             {
-                MessageBox.Show("The function keys are utilized by zelda3.exe's replay/savestate functionality and thus cannot be used for other inputs.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("The function keys are utilized by " + Program.game.Exe + "'s replay/savestate functionality and thus cannot be used for other inputs.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
 
             if (result.IsNumeric())
             {
-                MessageBox.Show("The number keys are utilized by zelda3.exe's replay/savestate functionality and thus cannot be used for other inputs.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("The number keys are utilized by " + Program.game.Exe + "'s replay/savestate functionality and thus cannot be used for other inputs.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
 
             if (result.Equals("-") | result.Equals("=") | result.Equals("Backspace"))
             {
-                MessageBox.Show("The " + result + " key is utilized by zelda3.exe's replay/savestate functionality and thus cannot be used for other inputs.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("The " + result + " key is utilized by " + Program.game.Exe + "'s replay/savestate functionality and thus cannot be used for other inputs.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
 
@@ -322,7 +322,7 @@ namespace Zelda_3_Launcher
             // Check for INI and if missing restore from initial install backup
             if (!File.Exists(iniFile))
             {
-                var iniBackup = Path.Combine(Program.repoDir, "saves", "zelda3.ini");
+                var iniBackup = Path.Combine(Program.repoDir, "saves", Program.game.Ini);
 
                 if (!File.Exists(iniBackup)) settingsForm.DownloadFreshINI();
 
@@ -469,6 +469,10 @@ namespace Zelda_3_Launcher
 
         private void FileINI()
         {
+            // Keys this game's ini never had (the zelda3-only cheats on sm and smw) are not written.
+            // DisplayPerf and ToggleRenderer are parsed by all three ports (src/config.c) but absent
+            // from every shipped ini, so they are kept explicitly.
+            if (File.Exists(iniFile)) IniShape.Prune(settings, File.ReadAllText(iniFile), "DisplayPerf", "ToggleRenderer");
             var filer = new FileIniDataParser();
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             filer.WriteFile(iniFile, settings, Encoding.GetEncoding(1252));
@@ -530,7 +534,7 @@ namespace Zelda_3_Launcher
 
         private void RestoreFromBackupINI()
         {
-            var iniBackup = Path.Combine(Program.repoDir, "saves", "zelda3.ini");
+            var iniBackup = Path.Combine(Program.repoDir, "saves", Program.game.Ini);
 
             if (!File.Exists(iniBackup)) settingsForm.DownloadFreshINI();
 

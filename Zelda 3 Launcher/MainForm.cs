@@ -120,7 +120,7 @@ namespace Zelda_3_Launcher
             var iniCopy = Path.Combine(Program.repoDir, "saves", game.Ini);
 
             Directory.CreateDirectory(Path.Combine(Program.repoDir, "saves"));
-            // Only zelda3.ini gets the tweaks below; other games keep their .ini and get a backup.
+            // Games without full settings keep their .ini untouched and get a backup; the rest get the comment cleanup below.
             if (!File.Exists(iniFile) || !game.FullSettings)
             {
                 if (File.Exists(iniFile)) File.Copy(iniFile, iniCopy, true);
@@ -211,7 +211,7 @@ namespace Zelda_3_Launcher
 
         private void settings_click(object sender, EventArgs e)
         {
-            // The settings and keymapper forms are written for zelda3.ini; other games open their .ini.
+            // FullSettings is true for every shipped game now (the forms adapt to the ini); the Notepad path stays for a future port that opts out.
             if (!Program.game.FullSettings)
             {
                 var ini = Path.Combine(Program.repoDir, Program.game.Ini);

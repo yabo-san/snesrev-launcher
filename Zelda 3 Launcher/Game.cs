@@ -30,7 +30,8 @@ namespace Zelda_3_Launcher
         // Asset step, run by cmd in the game dir after the ROM is in place, using the kit's own
         // python\python.exe. Empty = the port reads the ROM directly.
         public string AssetCommand { get; init; } = "";
-        public bool FullSettings { get; init; }           // the settings and keymapper forms are written for zelda3.ini
+        public string Commit { get; init; } = "";         // the snesrev commit the kit is built from (games.yml pins the same)
+        public bool FullSettings { get; init; } = true;   // the settings and keymapper forms adapt to the keys in the game's ini (IniShape)
 
         public bool ExtractAssets => AssetCommand.Length > 0;
 
@@ -40,27 +41,28 @@ namespace Zelda_3_Launcher
         public const string Releases = "https://github.com/yabo-san/snesrev-launcher/releases/download";
         public string PackageUrl => $"{Releases}/v{LauncherVersion}/{Dir}-win-x64.zip";
         public const string PackageMarker = ".snesrev-package";
+        // The pristine ini for this game, from the same commit the kit was built from.
+        public string FreshIniUrl => $"https://raw.githubusercontent.com/snesrev/{Dir}/{Commit}/{Ini}";
 
         public static readonly Game[] All =
         {
             new Game
             {
                 Id = "zelda3", Name = "Zelda 3 (A Link to the Past)", Dir = "zelda3",
-                Rom = "zelda3.sfc", Exe = "zelda3.exe", Ini = "zelda3.ini",
+                Rom = "zelda3.sfc", Exe = "zelda3.exe", Ini = "zelda3.ini", Commit = "fbbb3f967a51fafe642e6140d0753979e73b4090",
                 Sha1 = new[] { "6D4F10A8B10E10DBE624CB23CF03B88BB8252973" },
                 AssetCommand = "cd .\\assets && ..\\python\\python.exe restool.py --extract-from-rom",
-                FullSettings = true,
             },
             new Game
             {
                 Id = "sm", Name = "Super Metroid", Dir = "sm",
-                Rom = "sm.smc", Exe = "sm.exe", Ini = "sm.ini",
+                Rom = "sm.smc", Exe = "sm.exe", Ini = "sm.ini", Commit = "578f90b3cc49557bb70060ad033bb90b8cf8ac50",
                 Sha1 = new[] { "DA957F0D63D14CB441D215462904C4FA8519C613" },
             },
             new Game
             {
                 Id = "smw", Name = "Super Mario World", Dir = "smw",
-                Rom = "smw.sfc", Exe = "smw.exe", Ini = "smw.ini",
+                Rom = "smw.sfc", Exe = "smw.exe", Ini = "smw.ini", Commit = "eae20c65c58930c8b62c76188d259579ad4130f1",
                 Sha1 = new[] { "6B47BB75D16514B6A476AA0C73A683A2A4C18765" },
                 AssetCommand = "cd .\\assets && ..\\python\\python.exe restool.py",
             },
