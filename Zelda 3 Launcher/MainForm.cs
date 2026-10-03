@@ -27,7 +27,7 @@ namespace Zelda_3_Launcher
 
             this.launch.Text = "Running...";
             this.WindowState = FormWindowState.Minimized;
-            if (runProcess("cmd.exe", "/C " + Program.game.Exe + (Program.game.LaunchArgs.Length > 0 ? " " + Program.game.LaunchArgs : "")))
+            if (runProcess("cmd.exe", "/C .\\" + Program.game.Exe + (Program.game.LaunchArgs.Length > 0 ? " " + Program.game.LaunchArgs : "")))
             {
                 MessageBox.Show("Error occurred while launching " + Program.game.Name + ".\n\nPlease refer to " + Program.logFile + " for further details.");
             }
@@ -103,11 +103,13 @@ namespace Zelda_3_Launcher
             }
 
             // The kit's build.cmd: the port's own compile line, with the TCC and SDL2 the kit carries.
+            // Explicit .\ because Windows with NoDefaultCurrentDirectoryInExePath set (the owner's PC) makes
+            // cmd refuse a bare "build.cmd"; CI runners do not set it, which is why CI never saw it.
             // Same bytes CI compiled when it verified the kit.
             this.build.Text = "Building...";
             progressCompile.Value++;
             labelCompileStatus.Text = "Building " + game.Exe + "...";
-            if (runProcess("cmd.exe", "/C build.cmd"))
+            if (runProcess("cmd.exe", "/C .\build.cmd"))
             {
                 MessageBox.Show("Error occurred while building " + game.Exe + ".\n\nPlease refer to " + Program.logFile + " for further details.");
                 return;
