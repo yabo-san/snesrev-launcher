@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.3](https://github.com/yabo-san/snesrev-launcher/compare/v1.6.2...v1.6.3) (2026-10-03)
+
+
+### Bug Fixes
+
+* log writes never throw; build.cmd and the game run as .\name ([83a1fcb](https://github.com/yabo-san/snesrev-launcher/commit/83a1fcba191aecf3375b6ba3e77d1529d106e06b))
+* log writes never throw; v1.6.2 crashed in runProcess when something else held smw.log open ([4d8600e](https://github.com/yabo-san/snesrev-launcher/commit/4d8600e26c50d3132e07d05e6ec4247629c3d599))
+* run build.cmd and the game exe as .\name; a bare name fails where cmd does not search the current directory ([010e939](https://github.com/yabo-san/snesrev-launcher/commit/010e93949c7a5d80085c06bd4eaf00e40ff72f91))
+* verbatim string for .\build.cmd (\b was a backspace escape) ([2da2374](https://github.com/yabo-san/snesrev-launcher/commit/2da237497e3c2c528b5b4bc2a29d254e1601f848))
+
 ## [1.6.2](https://github.com/yabo-san/snesrev-launcher/compare/v1.6.1...v1.6.2) (2026-10-03)
 
 
